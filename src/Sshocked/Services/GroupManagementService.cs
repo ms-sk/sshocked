@@ -4,7 +4,7 @@ using Sshocked.Models;
 
 namespace Sshocked.Services;
 
-public class GroupManagementService : IGroupManagementService
+public sealed class GroupManagementService : IGroupManagementService
 {
     private readonly IConfigRepository _configRepository;
     private readonly ILogger<GroupManagementService> _logger;
@@ -67,7 +67,6 @@ public class GroupManagementService : IGroupManagementService
 
         config.Groups.Remove(group);
 
-        // Unassign hosts in this group
         foreach (var host in config.Hosts.Where(h => h.GroupId == groupId))
         {
             host.GroupId = string.Empty;

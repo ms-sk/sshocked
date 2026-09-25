@@ -4,7 +4,7 @@ using Sshocked.Models;
 
 namespace Sshocked.Services;
 
-public class JsonConfigRepository : IConfigRepository
+public sealed class JsonConfigRepository : IConfigRepository
 {
     private readonly string _filePath;
 

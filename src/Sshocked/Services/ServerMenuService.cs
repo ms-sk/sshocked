@@ -5,24 +5,30 @@ using Sshocked.Models;
 
 namespace Sshocked.Services;
 
-public class ServerMenuService : IServerMenuService
+public sealed class ServerMenuService : IServerMenuService
 {
     private readonly IConfigRepository _configRepository;
     private readonly IServerCrudService _serverCrud;
-    private readonly IProcessService _processService;
+    private readonly ITableRendererService _tableRenderer;
+    private readonly IHostSelectorService _hostSelector;
+    private readonly IConsoleHelperService _consoleHelper;
     private readonly INavigationService _nav;
     private readonly ILogger<ServerMenuService> _logger;
 
     public ServerMenuService(
         IConfigRepository configRepository,
         IServerCrudService serverCrud,
-        IProcessService processService,
+        ITableRendererService tableRenderer,
+        IHostSelectorService hostSelector,
+        IConsoleHelperService consoleHelper,
         INavigationService nav,
         ILogger<ServerMenuService> logger)
     {
         _configRepository = configRepository;
         _serverCrud = serverCrud;
-        _processService = processService;
+        _tableRenderer = tableRenderer;
+        _hostSelector = hostSelector;
+        _consoleHelper = consoleHelper;
         _nav = nav;
         _logger = logger;
     }
@@ -33,7 +39,7 @@ public class ServerMenuService : IServerMenuService
         if (config.Hosts.Count == 0)
         {
             AnsiConsole.MarkupLine("[red]No servers configured.[/]");
-            WaitForKey();
+            _consoleHelper.WaitForKey();
             return;
         }
 
@@ -43,30 +49,15 @@ public class ServerMenuService : IServerMenuService
         {
             config = _configRepository.Load();
             AnsiConsole.Clear();
-            RenderServerTable(config);
+            _tableRenderer.RenderServerTable(config);
 
-            var hostLabels = config.Hosts
-                .Select(h => (Host: h, Label: $"{Markup.Escape(h.Alias)} ({Markup.Escape(h.HostName)})"))
-                .ToList();
-
-            var backLabel = "[[B]] Back to Main Menu";
-            var choices = hostLabels.Select(hl => hl.Label).ToList();
-            choices.Add(backLabel);
-
-            var selectedLabel = AnsiConsole.Prompt(
-                new SelectionPrompt<string>()
-                    .Title("Select a [green]server[/] ([grey]clear search for Back[/]):")
-                    .PageSize(10)
-                    .EnableSearch()
-                    .AddChoices(choices));
-
-            if (selectedLabel == backLabel)
+            var host = _hostSelector.SelectHost(config.Hosts, "Select a [green]server[/]");
+            if (host is null)
             {
                 _nav.Pop();
                 return;
             }
 
-            var host = hostLabels.First(hl => hl.Label == selectedLabel).Host;
             ShowServerActions(config, host);
         }
     }
@@ -87,125 +78,40 @@ public class ServerMenuService : IServerMenuService
                     .Title("[bold yellow]Server Actions[/]")
                     .PageSize(10)
                     .AddChoices([
-                        "[[C]] Connect",
-                        "[[E]] Edit",
-                        "[[D]] Delete",
-                        "[[B]] Back"
+                        MenuLabels.Connect,
+                        MenuLabels.Edit,
+                        MenuLabels.Delete,
+                        MenuLabels.Back
                     ]));
 
             switch (choice)
             {
-                case "[[C]] Connect":
-                    RunSsh(host);
+                case var c when c == MenuLabels.Connect:
+                    _consoleHelper.RunSsh(host);
                     break;
-                case "[[E]] Edit":
+                case var c when c == MenuLabels.Edit:
                     _serverCrud.Edit(host);
-                    AnsiConsole.MarkupLine($"[green]✓[/] Server '[cyan]{Markup.Escape(host.Alias)}[/]' updated.");
-                    WaitForKey();
+                    AnsiConsole.MarkupLine($"[green]\u2713[/] Server '[cyan]{Markup.Escape(host.Alias)}[/]' updated.");
+                    _consoleHelper.WaitForKey();
                     break;
-                case "[[D]] Delete":
+                case var c when c == MenuLabels.Delete:
                     if (_serverCrud.Delete(host))
                     {
-                        AnsiConsole.MarkupLine($"[green]✓[/] Server '[cyan]{Markup.Escape(host.Alias)}[/]' deleted.");
-                        WaitForKey();
+                        AnsiConsole.MarkupLine($"[green]\u2713[/] Server '[cyan]{Markup.Escape(host.Alias)}[/]' deleted.");
+                        _consoleHelper.WaitForKey();
                         _nav.Pop();
                         return;
                     }
                     else
                     {
                         AnsiConsole.MarkupLine("[grey]Deletion cancelled.[/]");
-                        WaitForKey();
+                        _consoleHelper.WaitForKey();
                     }
                     break;
-                case "[[B]] Back":
+                case var c when c == MenuLabels.Back:
                     _nav.Pop();
                     return;
             }
         }
-    }
-
-    private void RunSsh(ServerHost host)
-    {
-        AnsiConsole.Console.Profile.Capabilities.Interactive = false;
-        System.Console.ResetColor();
-
-        _processService.RunSshAsync(host).GetAwaiter().GetResult();
-
-        System.Console.ResetColor();
-        AnsiConsole.Console.Profile.Capabilities.Interactive = true;
-    }
-
-    private static void RenderServerTable(AppConfig config)
-    {
-        var groups = config.Groups;
-        var hosts = config.Hosts;
-
-        if (hosts.Count == 0)
-        {
-            AnsiConsole.MarkupLine("[grey]No hosts configured yet.[/]");
-            AnsiConsole.WriteLine();
-            return;
-        }
-
-        var uncategorized = hosts.Where(h =>
-            string.IsNullOrEmpty(h.GroupId) ||
-            !groups.Any(g => g.Id == h.GroupId)).ToList();
-
-        if (uncategorized.Count > 0)
-        {
-            RenderGroup("Uncategorized", uncategorized);
-        }
-
-        foreach (var group in groups)
-        {
-            var groupHosts = hosts.Where(h => h.GroupId == group.Id).ToList();
-            if (groupHosts.Count > 0)
-            {
-                RenderGroup(group.Name, groupHosts);
-            }
-        }
-
-        AnsiConsole.WriteLine();
-    }
-
-    private static void RenderGroup(string groupName, List<ServerHost> hosts)
-    {
-        var table = new Table()
-            .Border(TableBorder.Rounded)
-            .Title($"[cyan]{groupName}[/]")
-            .AddColumns([
-                new TableColumn("Alias").Centered(),
-                new TableColumn("Host").Centered(),
-                new TableColumn("User").Centered(),
-                new TableColumn("Port").Centered(),
-                new TableColumn("Auth").Centered()
-            ]);
-
-        foreach (var host in hosts)
-        {
-            var authLabel = host.AuthType switch
-            {
-                AuthType.Password => "Password",
-                AuthType.SshAgent => "Agent",
-                AuthType.CustomConfig => "Custom",
-                _ => "SSH Key"
-            };
-
-            table.AddRow(
-                new Markup($"[bold]{Markup.Escape(host.Alias)}[/]"),
-                new Text(host.HostName),
-                new Text(host.User),
-                new Text(host.Port.ToString()),
-                new Text(authLabel));
-        }
-
-        AnsiConsole.Write(table);
-        AnsiConsole.WriteLine();
-    }
-
-    private static void WaitForKey()
-    {
-        AnsiConsole.MarkupLine("Press any key to continue...");
-        System.Console.ReadKey(true);
     }
 }

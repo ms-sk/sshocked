@@ -5,7 +5,7 @@ using Sshocked.Models;
 
 namespace Sshocked.Services;
 
-public class ServerCrudService : IServerCrudService
+public sealed class ServerCrudService : IServerCrudService
 {
     private readonly IConfigRepository _configRepository;
     private readonly IGroupManagementService _groupManagement;

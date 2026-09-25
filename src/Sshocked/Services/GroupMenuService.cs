@@ -5,12 +5,14 @@ using Sshocked.Models;
 
 namespace Sshocked.Services;
 
-public class GroupMenuService : IGroupMenuService
+public sealed class GroupMenuService : IGroupMenuService
 {
     private readonly IConfigRepository _configRepository;
     private readonly IGroupManagementService _groupManagement;
     private readonly IServerMenuService _serverMenu;
-    private readonly IProcessService _processService;
+    private readonly ITableRendererService _tableRenderer;
+    private readonly IHostSelectorService _hostSelector;
+    private readonly IConsoleHelperService _consoleHelper;
     private readonly INavigationService _nav;
     private readonly ILogger<GroupMenuService> _logger;
 
@@ -18,14 +20,18 @@ public class GroupMenuService : IGroupMenuService
         IConfigRepository configRepository,
         IGroupManagementService groupManagement,
         IServerMenuService serverMenu,
-        IProcessService processService,
+        ITableRendererService tableRenderer,
+        IHostSelectorService hostSelector,
+        IConsoleHelperService consoleHelper,
         INavigationService nav,
         ILogger<GroupMenuService> logger)
     {
         _configRepository = configRepository;
         _groupManagement = groupManagement;
         _serverMenu = serverMenu;
-        _processService = processService;
+        _tableRenderer = tableRenderer;
+        _hostSelector = hostSelector;
+        _consoleHelper = consoleHelper;
         _nav = nav;
         _logger = logger;
     }
@@ -36,7 +42,7 @@ public class GroupMenuService : IGroupMenuService
         if (groups.Count == 0)
         {
             AnsiConsole.MarkupLine("[red]No groups configured. Create one first.[/]");
-            WaitForKey();
+            _consoleHelper.WaitForKey();
             return;
         }
 
@@ -48,7 +54,7 @@ public class GroupMenuService : IGroupMenuService
             groups = _groupManagement.GetAll();
             AnsiConsole.Clear();
 
-            var backLabel = "[[B]] Back to Main Menu";
+            var backLabel = MenuLabels.BackToMainMenu;
             var groupNames = groups.Select(g => g.Name).ToList();
             groupNames.Add(backLabel);
 
@@ -59,7 +65,7 @@ public class GroupMenuService : IGroupMenuService
                     .EnableSearch()
                     .AddChoices(groupNames));
 
-            if (selectedName == "[[B]] Back to Main Menu")
+            if (selectedName == backLabel)
             {
                 _nav.Pop();
                 return;
@@ -89,15 +95,15 @@ public class GroupMenuService : IGroupMenuService
             }
             else
             {
-                RenderGroup(group.Name, groupHosts);
+                _tableRenderer.RenderGroup(group.Name, groupHosts);
             }
 
-            var choices = new List<string> { "[[S]] Select server..." };
+            var choices = new List<string> { MenuLabels.SelectServer };
             if (groupHosts.Count > 0)
             {
-                choices.Add("[[C]] Connect all");
+                choices.Add(MenuLabels.ConnectAll);
             }
-            choices.Add("[[B]] Back");
+            choices.Add(MenuLabels.Back);
 
             var choice = AnsiConsole.Prompt(
                 new SelectionPrompt<string>()
@@ -107,13 +113,13 @@ public class GroupMenuService : IGroupMenuService
 
             switch (choice)
             {
-                case "[[S]] Select server...":
+                case var c when c == MenuLabels.SelectServer:
                     SelectServerFromGroup(config, group);
                     break;
-                case "[[C]] Connect all":
+                case var c when c == MenuLabels.ConnectAll:
                     ConnectAll(groupHosts);
                     break;
-                case "[[B]] Back":
+                case var c when c == MenuLabels.Back:
                     _nav.Pop();
                     return;
             }
@@ -129,31 +135,16 @@ public class GroupMenuService : IGroupMenuService
         if (hosts.Count == 0)
         {
             AnsiConsole.MarkupLine("[red]No servers available.[/]");
-            WaitForKey();
+            _consoleHelper.WaitForKey();
             return;
         }
 
-        var hostLabels = hosts
-            .Select(h => (Host: h, Label: $"{Markup.Escape(h.Alias)} ({Markup.Escape(h.HostName)})"))
-            .ToList();
-
-        var backLabel = "[[B]] Back";
-        var choices = hostLabels.Select(hl => hl.Label).ToList();
-        choices.Add(backLabel);
-
-        var selectedLabel = AnsiConsole.Prompt(
-            new SelectionPrompt<string>()
-                .Title("Select a [green]server[/] ([grey]clear search for Back[/]):")
-                .PageSize(10)
-                .EnableSearch()
-                .AddChoices(choices));
-
-        if (selectedLabel == backLabel)
+        var host = _hostSelector.SelectHost(hosts, "Select a [green]server[/]");
+        if (host is null)
         {
             return;
         }
 
-        var host = hostLabels.First(hl => hl.Label == selectedLabel).Host;
         _serverMenu.ShowServerActions(config, host);
     }
 
@@ -162,59 +153,7 @@ public class GroupMenuService : IGroupMenuService
         foreach (var host in hosts)
         {
             AnsiConsole.MarkupLine($"Connecting to [cyan]{Markup.Escape(host.Alias)}[/]...");
-            RunSsh(host);
+            _consoleHelper.RunSsh(host);
         }
-    }
-
-    private void RunSsh(ServerHost host)
-    {
-        AnsiConsole.Console.Profile.Capabilities.Interactive = false;
-        System.Console.ResetColor();
-
-        _processService.RunSshAsync(host).GetAwaiter().GetResult();
-
-        System.Console.ResetColor();
-        AnsiConsole.Console.Profile.Capabilities.Interactive = true;
-    }
-
-    private static void RenderGroup(string groupName, List<ServerHost> hosts)
-    {
-        var table = new Table()
-            .Border(TableBorder.Rounded)
-            .Title($"[cyan]{groupName}[/]")
-            .AddColumns([
-                new TableColumn("Alias").Centered(),
-                new TableColumn("Host").Centered(),
-                new TableColumn("User").Centered(),
-                new TableColumn("Port").Centered(),
-                new TableColumn("Auth").Centered()
-            ]);
-
-        foreach (var host in hosts)
-        {
-            var authLabel = host.AuthType switch
-            {
-                AuthType.Password => "Password",
-                AuthType.SshAgent => "Agent",
-                AuthType.CustomConfig => "Custom",
-                _ => "SSH Key"
-            };
-
-            table.AddRow(
-                new Markup($"[bold]{Markup.Escape(host.Alias)}[/]"),
-                new Text(host.HostName),
-                new Text(host.User),
-                new Text(host.Port.ToString()),
-                new Text(authLabel));
-        }
-
-        AnsiConsole.Write(table);
-        AnsiConsole.WriteLine();
-    }
-
-    private static void WaitForKey()
-    {
-        AnsiConsole.MarkupLine("Press any key to continue...");
-        System.Console.ReadKey(true);
     }
 }

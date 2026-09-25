@@ -4,7 +4,7 @@ using Sshocked.Models;
 
 namespace Sshocked.Services;
 
-public class SshRunnerService : ISshRunnerService
+public sealed class SshRunnerService : ISshRunnerService
 {
     private readonly IProcessService _processService;
     private readonly ILogger<SshRunnerService> _logger;

@@ -5,7 +5,7 @@ using Sshocked.Models;
 
 namespace Sshocked.Services;
 
-public class ProcessService : IProcessService
+public sealed class ProcessService : IProcessService
 {
     private readonly ILogger<ProcessService> _logger;
 

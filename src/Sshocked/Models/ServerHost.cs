@@ -1,6 +1,6 @@
 namespace Sshocked.Models;
 
-public class ServerHost
+public sealed class ServerHost
 {
     public string Id { get; set; } = string.Empty;
     public string Alias { get; set; } = string.Empty;

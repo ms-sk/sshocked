@@ -4,7 +4,7 @@ using Sshocked.Models;
 
 namespace Sshocked.Services;
 
-public class AppRunner : IAppRunner
+public sealed class AppRunner : IAppRunner
 {
     private readonly IConfigRepository _configRepository;
     private readonly ISshConfigImporter _sshConfigImporter;

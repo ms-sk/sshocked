@@ -1,6 +1,6 @@
 namespace Sshocked.Models;
 
-public class AppConfig
+public sealed class AppConfig
 {
     public List<ServerGroup> Groups { get; set; } = [];
     public List<ServerHost> Hosts { get; set; } = [];

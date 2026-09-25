@@ -2,7 +2,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Sshocked.Logging;
 
-public class FileLogger : ILogger
+public sealed class FileLogger : ILogger
 {
     private readonly string _categoryName;
     private readonly FileLoggerProcessor _processor;
@@ -41,12 +41,4 @@ public class FileLogger : ILogger
             Message = message
         });
     }
-}
-
-public readonly struct LogEntry
-{
-    public DateTimeOffset Timestamp { get; init; }
-    public LogLevel LogLevel { get; init; }
-    public string CategoryName { get; init; }
-    public string Message { get; init; }
 }

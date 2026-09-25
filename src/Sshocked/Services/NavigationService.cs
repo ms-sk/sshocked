@@ -3,7 +3,7 @@ using Sshocked.Models;
 
 namespace Sshocked.Services;
 
-public class NavigationService : INavigationService
+public sealed class NavigationService : INavigationService
 {
     private readonly Stack<ViewType> _stack = new();
 

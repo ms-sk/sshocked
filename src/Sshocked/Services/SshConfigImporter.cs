@@ -4,7 +4,7 @@ using Sshocked.Models;
 
 namespace Sshocked.Services;
 
-public class SshConfigImporter : ISshConfigImporter
+public sealed class SshConfigImporter : ISshConfigImporter
 {
     private readonly ILogger<SshConfigImporter> _logger;
 
@@ -39,11 +39,9 @@ public class SshConfigImporter : ISshConfigImporter
         {
             var line = rawLine.Trim();
 
-            // Skip comments and empty lines
             if (string.IsNullOrEmpty(line) || line.StartsWith('#'))
                 continue;
 
-            // Split on first space or tab
             var parts = line.Split([' ', '\t'], 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             if (parts.Length < 2)
                 continue;
@@ -54,7 +52,6 @@ public class SshConfigImporter : ISshConfigImporter
             switch (keyword)
             {
                 case "host":
-                    // Save previous host block if complete
                     if (currentAlias is not null && currentHostName is not null)
                     {
                         hosts.Add(CreateHost(currentAlias, currentHostName, currentUser, currentPort));
@@ -81,7 +78,6 @@ public class SshConfigImporter : ISshConfigImporter
             }
         }
 
-        // Don't forget the last block
         if (currentAlias is not null && currentHostName is not null)
         {
             hosts.Add(CreateHost(currentAlias, currentHostName, currentUser, currentPort));

@@ -67,5 +67,8 @@ static void ConfigureServices(IServiceCollection services)
     services.AddSingleton<IGroupMenuService, GroupMenuService>();
     services.AddSingleton<IServerMenuService, ServerMenuService>();
     services.AddSingleton<IMainMenuService, MainMenuService>();
+    services.AddSingleton<ITableRendererService, TableRendererService>();
+    services.AddSingleton<IHostSelectorService, HostSelectorService>();
+    services.AddSingleton<IConsoleHelperService, ConsoleHelperService>();
     services.AddTransient<IAppRunner, AppRunner>();
 }
