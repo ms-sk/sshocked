@@ -49,12 +49,22 @@ public class ServerMenuService : IServerMenuService
                 .Select(h => (Host: h, Label: $"{Markup.Escape(h.Alias)} ({Markup.Escape(h.HostName)})"))
                 .ToList();
 
+            var backLabel = "[[B]] Back to Main Menu";
+            var choices = hostLabels.Select(hl => hl.Label).ToList();
+            choices.Add(backLabel);
+
             var selectedLabel = AnsiConsole.Prompt(
                 new SelectionPrompt<string>()
-                    .Title("Select a [green]server[/] ([grey]Esc[/] to go back):")
+                    .Title("Select a [green]server[/] ([grey]clear search for Back[/]):")
                     .PageSize(10)
                     .EnableSearch()
-                    .AddChoices(hostLabels.Select(hl => hl.Label)));
+                    .AddChoices(choices));
+
+            if (selectedLabel == backLabel)
+            {
+                _nav.Pop();
+                return;
+            }
 
             var host = hostLabels.First(hl => hl.Label == selectedLabel).Host;
             ShowServerActions(config, host);

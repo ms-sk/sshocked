@@ -49,13 +49,20 @@ public class GroupMenuService : IGroupMenuService
             AnsiConsole.Clear();
 
             var groupNames = groups.Select(g => g.Name).ToList();
+            groupNames.Add("[[B]] Back to Main Menu");
 
             var selectedName = AnsiConsole.Prompt(
                 new SelectionPrompt<string>()
-                    .Title("[bold yellow]Select a Group[/] ([grey]Esc[/] to go back)")
+                    .Title("[bold yellow]Select a Group[/]")
                     .PageSize(10)
                     .EnableSearch()
                     .AddChoices(groupNames));
+
+            if (selectedName == "[[B]] Back to Main Menu")
+            {
+                _nav.Pop();
+                return;
+            }
 
             var group = groups.First(g => g.Name == selectedName);
             ShowGroupDetail(config, group);
