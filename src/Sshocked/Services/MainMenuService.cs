@@ -57,7 +57,7 @@ public class MainMenuService : IMainMenuService
                         "[[C]] Connect",
                         "[[S]] Servers",
                         "[[G]] Groups",
-                        "[[Q]] Quit"
+                        "[[E]] Exit"
                     ]));
 
             switch (choice)
@@ -71,7 +71,7 @@ public class MainMenuService : IMainMenuService
                 case "[[G]] Groups":
                     ShowGroupsMenu(config);
                     break;
-                case "[[Q]] Quit":
+                case "[[E]] Exit":
                     running = false;
                     break;
             }
