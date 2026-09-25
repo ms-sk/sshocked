@@ -179,12 +179,21 @@ public class MainMenuService : IMainMenuService
             .Select(h => (Host: h, Label: $"{Markup.Escape(h.Alias)} ({Markup.Escape(h.HostName)})"))
             .ToList();
 
+        var backLabel = "[[B]] Back";
+        var choices = hostLabels.Select(hl => hl.Label).ToList();
+        choices.Add(backLabel);
+
         var selectedLabel = AnsiConsole.Prompt(
             new SelectionPrompt<string>()
-                .Title("Select a [green]server[/] to connect to:")
+                .Title("Select a [green]server[/] to connect to ([grey]clear search for Back[/]):")
                 .PageSize(10)
                 .EnableSearch()
-                .AddChoices(hostLabels.Select(hl => hl.Label)));
+                .AddChoices(choices));
+
+        if (selectedLabel == backLabel)
+        {
+            return;
+        }
 
         var host = hostLabels.First(hl => hl.Label == selectedLabel).Host;
 
@@ -210,12 +219,21 @@ public class MainMenuService : IMainMenuService
             .Select(h => (Host: h, Label: $"{Markup.Escape(h.Alias)} ({Markup.Escape(h.HostName)})"))
             .ToList();
 
+        var backLabel = "[[B]] Back";
+        var choices = hostLabels.Select(hl => hl.Label).ToList();
+        choices.Add(backLabel);
+
         var selectedLabel = AnsiConsole.Prompt(
             new SelectionPrompt<string>()
-                .Title("Select a [green]server[/] to edit:")
+                .Title("Select a [green]server[/] to edit ([grey]clear search for Back[/]):")
                 .PageSize(10)
                 .EnableSearch()
-                .AddChoices(hostLabels.Select(hl => hl.Label)));
+                .AddChoices(choices));
+
+        if (selectedLabel == backLabel)
+        {
+            return;
+        }
 
         var host = hostLabels.First(hl => hl.Label == selectedLabel).Host;
 
@@ -237,12 +255,21 @@ public class MainMenuService : IMainMenuService
             .Select(h => (Host: h, Label: $"{Markup.Escape(h.Alias)} ({Markup.Escape(h.HostName)})"))
             .ToList();
 
+        var backLabel = "[[B]] Back";
+        var choices = hostLabels.Select(hl => hl.Label).ToList();
+        choices.Add(backLabel);
+
         var selectedLabel = AnsiConsole.Prompt(
             new SelectionPrompt<string>()
-                .Title("Select a [green]server[/] to delete:")
+                .Title("Select a [green]server[/] to delete ([grey]clear search for Back[/]):")
                 .PageSize(10)
                 .EnableSearch()
-                .AddChoices(hostLabels.Select(hl => hl.Label)));
+                .AddChoices(choices));
+
+        if (selectedLabel == backLabel)
+        {
+            return;
+        }
 
         var host = hostLabels.First(hl => hl.Label == selectedLabel).Host;
 

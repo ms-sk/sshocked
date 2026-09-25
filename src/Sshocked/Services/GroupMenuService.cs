@@ -48,12 +48,13 @@ public class GroupMenuService : IGroupMenuService
             groups = _groupManagement.GetAll();
             AnsiConsole.Clear();
 
+            var backLabel = "[[B]] Back to Main Menu";
             var groupNames = groups.Select(g => g.Name).ToList();
-            groupNames.Add("[[B]] Back to Main Menu");
+            groupNames.Add(backLabel);
 
             var selectedName = AnsiConsole.Prompt(
                 new SelectionPrompt<string>()
-                    .Title("[bold yellow]Select a Group[/]")
+                    .Title("[bold yellow]Select a Group[/] ([grey]clear search for Back[/]):")
                     .PageSize(10)
                     .EnableSearch()
                     .AddChoices(groupNames));
@@ -136,12 +137,21 @@ public class GroupMenuService : IGroupMenuService
             .Select(h => (Host: h, Label: $"{Markup.Escape(h.Alias)} ({Markup.Escape(h.HostName)})"))
             .ToList();
 
+        var backLabel = "[[B]] Back";
+        var choices = hostLabels.Select(hl => hl.Label).ToList();
+        choices.Add(backLabel);
+
         var selectedLabel = AnsiConsole.Prompt(
             new SelectionPrompt<string>()
-                .Title("Select a [green]server[/]:")
+                .Title("Select a [green]server[/] ([grey]clear search for Back[/]):")
                 .PageSize(10)
                 .EnableSearch()
-                .AddChoices(hostLabels.Select(hl => hl.Label)));
+                .AddChoices(choices));
+
+        if (selectedLabel == backLabel)
+        {
+            return;
+        }
 
         var host = hostLabels.First(hl => hl.Label == selectedLabel).Host;
         _serverMenu.ShowServerActions(config, host);
