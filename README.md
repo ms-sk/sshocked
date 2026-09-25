@@ -84,7 +84,7 @@ The main menu displays a table of all configured servers grouped by category. Na
 - **Arrow keys** — Move selection
 - **Enter** — Select a server or action
 - **`[[B]] Back`** — Return to the previous menu
-- **`[[Q]] Quit`** — Exit the application
+- **`[[E]] Exit`** — Exit the application
 
 ### Commands
 
