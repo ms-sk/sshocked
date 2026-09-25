@@ -10,7 +10,12 @@ public class JsonConfigRepository : IConfigRepository
 
     public JsonConfigRepository()
     {
-        var appDir = AppContext.BaseDirectory;
+        var baseDir = Environment.OSVersion.Platform == PlatformID.Win32NT
+            ? Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config");
+
+        var appDir = Path.Combine(baseDir, "sshocked");
+        Directory.CreateDirectory(appDir);
         _filePath = Path.Combine(appDir, "appconfig.json");
     }
 

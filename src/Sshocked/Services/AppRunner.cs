@@ -8,22 +8,25 @@ public class AppRunner : IAppRunner
 {
     private readonly IConfigRepository _configRepository;
     private readonly ISshConfigImporter _sshConfigImporter;
+    private readonly IMainMenuService _mainMenu;
     private readonly IConsoleWriterService _console;
     private readonly ILogger<AppRunner> _logger;
 
     public AppRunner(
         IConfigRepository configRepository,
         ISshConfigImporter sshConfigImporter,
+        IMainMenuService mainMenu,
         IConsoleWriterService console,
         ILogger<AppRunner> logger)
     {
         _configRepository = configRepository;
         _sshConfigImporter = sshConfigImporter;
+        _mainMenu = mainMenu;
         _console = console;
         _logger = logger;
     }
 
-    public Task RunAsync()
+    public async Task RunAsync()
     {
         _logger.LogInformation("AppRunner starting");
 
@@ -60,13 +63,9 @@ public class AppRunner : IAppRunner
             config.IsFirstStart = false;
             _configRepository.Save(config);
         }
-        else
-        {
-            _console.WriteLine($"sshocked is ready. {config.Hosts.Count} host(s) configured.");
-            _logger.LogInformation("Loaded config with {HostCount} host(s)", config.Hosts.Count);
-        }
+
+        await _mainMenu.ShowAsync();
 
         _logger.LogInformation("AppRunner finished");
-        return Task.CompletedTask;
     }
 }

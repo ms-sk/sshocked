@@ -1,0 +1,92 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - rid: linux-x64
+            os: ubuntu-latest
+            aot-deps: true
+            archive-ext: tar.gz
+          - rid: linux-arm64
+            os: ubuntu-latest
+            aot-deps: true
+            archive-ext: tar.gz
+          - rid: win-x64
+            os: windows-latest
+            aot-deps: false
+            archive-ext: zip
+          - rid: osx-x64
+            os: macos-latest
+            aot-deps: false
+            archive-ext: tar.gz
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install Native AOT Dependencies (Linux)
+        if: matrix.aot-deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang zlib1g-dev
+
+      - name: Publish Native AOT Binary
+        run: |
+          dotnet publish src/Sshocked/Sshocked.csproj `
+            -c Release `
+            -r ${{ matrix.rid }} `
+            --self-contained true `
+            -o ./publish
+        shell: pwsh
+
+      - name: Package Binary (tar.gz)
+        if: matrix.archive-ext == 'tar.gz'
+        run: |
+          cd ./publish
+          tar -czvf ../sshocked-${{ matrix.rid }}.tar.gz sshocked
+
+      - name: Package Binary (zip)
+        if: matrix.archive-ext == 'zip'
+        run: |
+          Compress-Archive -Path ./publish/sshocked.exe -DestinationPath sshocked-${{ matrix.rid }}.zip
+        shell: pwsh
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sshocked-${{ matrix.rid }}
+          path: sshocked-${{ matrix.rid }}.${{ matrix.archive-ext }}
+
+  create-release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./artifacts/**/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

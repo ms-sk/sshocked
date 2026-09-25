@@ -9,4 +9,7 @@ public class ServerHost
     public int Port { get; set; } = 22;
     public string GroupId { get; set; } = string.Empty;
     public List<string> Tags { get; set; } = [];
+    public AuthType AuthType { get; set; } = AuthType.SshKey;
+    public string? IdentityFile { get; set; }
+    public string? CustomSshOptions { get; set; }
 }

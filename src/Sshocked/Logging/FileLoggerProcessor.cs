@@ -16,7 +16,11 @@ public sealed class FileLoggerProcessor : IDisposable
 
     public FileLoggerProcessor()
     {
-        _logDir = Path.Combine(AppContext.BaseDirectory, "logs");
+        var baseDir = Environment.OSVersion.Platform == PlatformID.Win32NT
+            ? Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config");
+
+        _logDir = Path.Combine(baseDir, "sshocked", "logs");
         Directory.CreateDirectory(_logDir);
         _logFilePath = Path.Combine(_logDir, "sshocked.log");
 
