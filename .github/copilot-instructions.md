@@ -39,9 +39,9 @@ The solution uses the `.slnx` format (not the legacy `.sln`). The `.vscode/setti
 - **IAppRunner**: Main application workflow, resolved from DI.
 - **File logging**: Custom `ILoggerProvider` implementation writes to `%APPDATA%\sshocked\logs\sshocked.log` (Windows) or `~/.config/sshocked/logs/sshocked.log` (Linux/macOS). No console sink — logging never writes to stdout. Uses a background `BlockingCollection`-backed queue for non-blocking writes. Logs roll at 5 MB with up to 3 backup files.
 
-## Commands
+## Skills
 
-See [SKILLS.md](skills/SKILLS.md) for the full list of commands and how to add new ones.
+See skills/ folder for the full list of skills and how to add new ones.
 
 ## Conventions
 

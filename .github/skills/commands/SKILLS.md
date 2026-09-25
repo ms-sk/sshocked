@@ -12,6 +12,8 @@ Each command is implemented as a dedicated service interface + class.
 | Group Management | `IGroupManagementService` | Create groups, assign hosts to groups |
 | SSH Config Import | `ISshConfigImporter` | Parse `~/.ssh/config` and import hosts |
 | Console I/O | `IConsoleWriterService` | Abstraction over `System.Console` for testability |
+| Argument Parser | `IArgumentParserService` | Parse CLI arguments before TUI initialization |
+| CLI Dispatcher | `ICliDispatcherService` | Handle direct connect, --list, --help, --version |
 
 ## Adding a New Command
 

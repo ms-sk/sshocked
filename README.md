@@ -77,9 +77,40 @@ Launch the application:
 
 ```bash
 sshocked
+# or the shorter alias:
+ssk
 ```
 
-The main menu displays a table of all configured servers grouped by category. Navigate using the keyboard:
+### CLI Arguments
+
+`sshocked` (or `ssk`) supports command-line arguments for direct SSH connections and non-interactive usage:
+
+| Command | Description |
+|---------|-------------|
+| `ssk` | Launch the interactive TUI menu |
+| `ssk <alias>` | Connect directly to a server by alias |
+| `ssk <hostname>` | Connect directly to a server by hostname |
+| `ssk <group>` | Connect to all servers in a group |
+| `ssk --list, -l` | List all configured servers and groups (pipe-friendly) |
+| `ssk --help, -h` | Show usage guide |
+| `ssk --version, -v` | Show version information |
+
+**Examples:**
+
+```bash
+# Direct connection to a server
+ssk prod-db-01
+
+# Connect to all servers in a group
+ssk production
+
+# Non-interactive listing (great for scripting)
+ssk --list | grep prod
+```
+
+### Interactive TUI
+
+When launched without arguments, the main menu displays a table of all configured servers grouped by category. Navigate using the keyboard:
 
 - **Arrow keys** — Move selection
 - **Enter** — Select a server or action
