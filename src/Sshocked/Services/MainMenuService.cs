@@ -183,6 +183,7 @@ public class MainMenuService : IMainMenuService
             new SelectionPrompt<string>()
                 .Title("Select a [green]server[/] to connect to:")
                 .PageSize(10)
+                .EnableSearch()
                 .AddChoices(hostLabels.Select(hl => hl.Label)));
 
         var host = hostLabels.First(hl => hl.Label == selectedLabel).Host;
@@ -213,6 +214,7 @@ public class MainMenuService : IMainMenuService
             new SelectionPrompt<string>()
                 .Title("Select a [green]server[/] to edit:")
                 .PageSize(10)
+                .EnableSearch()
                 .AddChoices(hostLabels.Select(hl => hl.Label)));
 
         var host = hostLabels.First(hl => hl.Label == selectedLabel).Host;
@@ -239,6 +241,7 @@ public class MainMenuService : IMainMenuService
             new SelectionPrompt<string>()
                 .Title("Select a [green]server[/] to delete:")
                 .PageSize(10)
+                .EnableSearch()
                 .AddChoices(hostLabels.Select(hl => hl.Label)));
 
         var host = hostLabels.First(hl => hl.Label == selectedLabel).Host;

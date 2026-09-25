@@ -57,6 +57,7 @@ public class ServerMenuService : IServerMenuService
                 new SelectionPrompt<string>()
                     .Title("Select a [green]server[/]:")
                     .PageSize(10)
+                    .EnableSearch()
                     .AddChoices(choices));
 
             if (selectedLabel == backLabel)

@@ -55,6 +55,7 @@ public class GroupMenuService : IGroupMenuService
                 new SelectionPrompt<string>()
                     .Title("[bold yellow]Select a Group[/]")
                     .PageSize(10)
+                    .EnableSearch()
                     .AddChoices(groupNames));
 
             if (selectedName == "[[B]] Back to Main Menu")
@@ -139,6 +140,7 @@ public class GroupMenuService : IGroupMenuService
             new SelectionPrompt<string>()
                 .Title("Select a [green]server[/]:")
                 .PageSize(10)
+                .EnableSearch()
                 .AddChoices(hostLabels.Select(hl => hl.Label)));
 
         var host = hostLabels.First(hl => hl.Label == selectedLabel).Host;
