@@ -41,7 +41,7 @@ The solution uses the `.slnx` format (not the legacy `.sln`). The `.vscode/setti
 
 ## Commands
 
-See [SKILLS.md](../SKILLS.md) for the full list of commands and how to add new ones.
+See [SKILLS.md](skills/SKILLS.md) for the full list of commands and how to add new ones.
 
 ## Conventions
 

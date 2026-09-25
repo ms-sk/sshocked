@@ -97,7 +97,7 @@ The main menu displays a table of all configured servers grouped by category. Na
 | **Create Group** | Create a new server group |
 | **Import SSH Config** | Parse `~/.ssh/config` and import matching hosts |
 
-See [SKILLS.md](SKILLS.md) for the full command reference and details on adding new commands.
+See [SKILLS.md](.github/skills/SKILLS.md) for the full command reference and details on adding new commands.
 
 ## Configuration
 
