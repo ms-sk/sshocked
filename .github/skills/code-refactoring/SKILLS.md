@@ -41,3 +41,4 @@
 - No `partial` keyword exists on non-generated classes; all uninherited classes carry the `sealed` modifier.
 - No German terms or non-essential comments exist in code or metadata.
 - Solution builds cleanly with no warnings regarding unused symbols.
+- No `Async` suffix on any `Task`-returning method.
