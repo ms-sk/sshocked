@@ -13,6 +13,7 @@ public sealed class GroupMenuService : IGroupMenuService
     private readonly ITableRendererService _tableRenderer;
     private readonly IHostSelectorService _hostSelector;
     private readonly IConsoleHelperService _consoleHelper;
+    private readonly IKeyboardShortcutService _keyboardShortcut;
     private readonly INavigationService _nav;
     private readonly ILogger<GroupMenuService> _logger;
 
@@ -23,6 +24,7 @@ public sealed class GroupMenuService : IGroupMenuService
         ITableRendererService tableRenderer,
         IHostSelectorService hostSelector,
         IConsoleHelperService consoleHelper,
+        IKeyboardShortcutService keyboardShortcut,
         INavigationService nav,
         ILogger<GroupMenuService> logger)
     {
@@ -32,6 +34,7 @@ public sealed class GroupMenuService : IGroupMenuService
         _tableRenderer = tableRenderer;
         _hostSelector = hostSelector;
         _consoleHelper = consoleHelper;
+        _keyboardShortcut = keyboardShortcut;
         _nav = nav;
         _logger = logger;
     }
@@ -98,28 +101,26 @@ public sealed class GroupMenuService : IGroupMenuService
                 _tableRenderer.RenderGroup(group.Name, groupHosts);
             }
 
-            var choices = new List<string> { MenuLabels.SelectServer };
+            var choices = new List<MenuEntry> { new("Select server...", 'S') };
             if (groupHosts.Count > 0)
             {
-                choices.Add(MenuLabels.ConnectAll);
+                choices.Add(new MenuEntry("Connect all", 'C'));
             }
-            choices.Add(MenuLabels.Back);
+            choices.Add(new MenuEntry("Back", 'B'));
 
-            var choice = AnsiConsole.Prompt(
-                new SelectionPrompt<string>()
-                    .Title("[bold yellow]Group Actions[/]")
-                    .PageSize(10)
-                    .AddChoices(choices));
+            var choice = _keyboardShortcut.ShowMenu(
+                "[bold yellow]Group Actions[/]",
+                choices);
 
-            switch (choice)
+            switch (choice?.Label)
             {
-                case var c when c == MenuLabels.SelectServer:
+                case "Select server...":
                     SelectServerFromGroup(config, group);
                     break;
-                case var c when c == MenuLabels.ConnectAll:
+                case "Connect all":
                     await ConnectAll(groupHosts);
                     break;
-                case var c when c == MenuLabels.Back:
+                case "Back":
                     _nav.Pop();
                     return;
             }

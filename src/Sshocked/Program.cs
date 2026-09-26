@@ -21,23 +21,17 @@ logger.LogInformation("Application starting");
 
 try
 {
-    // Parse CLI arguments first
     var argumentParser = serviceProvider.GetRequiredService<IArgumentParserService>();
     var parseResult = argumentParser.Parse(args);
 
     if (!parseResult.IsInteractive)
     {
-        // CLI mode: dispatch and exit
         var dispatcher = serviceProvider.GetRequiredService<ICliDispatcherService>();
         await dispatcher.Dispatch(parseResult);
         logger.LogInformation("CLI dispatch complete");
         return;
     }
 
-    // Interactive TUI mode
-    // Warm up Spectre.Console early — terminal profile detection can be slow
-    // on Windows Terminal / ConPTY. Doing it here while DI resolves is faster
-    // than on first menu interaction.
     _ = AnsiConsole.Profile.Capabilities;
 
     var appRunner = serviceProvider.GetRequiredService<IAppRunner>();
@@ -51,7 +45,6 @@ catch (Exception ex)
 }
 finally
 {
-    // Flush and dispose the logger processor before the service provider
     if (serviceProvider is IAsyncDisposable asyncDisposable)
     {
         await asyncDisposable.DisposeAsync();
@@ -85,6 +78,7 @@ static void ConfigureServices(IServiceCollection services)
     services.AddSingleton<ITableRendererService, TableRendererService>();
     services.AddSingleton<IHostSelectorService, HostSelectorService>();
     services.AddSingleton<IConsoleHelperService, ConsoleHelperService>();
+    services.AddSingleton<IKeyboardShortcutService, KeyboardShortcutService>();
     services.AddSingleton<IArgumentParserService, ArgumentParserService>();
     services.AddSingleton<ICliDispatcherService, CliDispatcherService>();
     services.AddTransient<IAppRunner, AppRunner>();

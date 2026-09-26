@@ -13,6 +13,7 @@ public sealed class ServerMenuService : IServerMenuService
     private readonly IHostSelectorService _hostSelector;
     private readonly IConsoleHelperService _consoleHelper;
     private readonly IDockerService _dockerService;
+    private readonly IKeyboardShortcutService _keyboardShortcut;
     private readonly INavigationService _nav;
     private readonly ILogger<ServerMenuService> _logger;
 
@@ -23,6 +24,7 @@ public sealed class ServerMenuService : IServerMenuService
         IHostSelectorService hostSelector,
         IConsoleHelperService consoleHelper,
         IDockerService dockerService,
+        IKeyboardShortcutService keyboardShortcut,
         INavigationService nav,
         ILogger<ServerMenuService> logger)
     {
@@ -32,6 +34,7 @@ public sealed class ServerMenuService : IServerMenuService
         _hostSelector = hostSelector;
         _consoleHelper = consoleHelper;
         _dockerService = dockerService;
+        _keyboardShortcut = keyboardShortcut;
         _nav = nav;
         _logger = logger;
     }
@@ -75,32 +78,30 @@ public sealed class ServerMenuService : IServerMenuService
             RenderServerHeader(host);
             RenderDockerSummary(host);
 
-            var choice = AnsiConsole.Prompt(
-                new SelectionPrompt<string>()
-                    .Title("[bold yellow]Server Actions[/]")
-                    .PageSize(10)
-                    .AddChoices([
-                        MenuLabels.Connect,
-                        MenuLabels.ScanDocker,
-                        MenuLabels.Edit,
-                        MenuLabels.Delete,
-                        MenuLabels.Back
-                    ]));
+            var choice = _keyboardShortcut.ShowMenu(
+                "[bold yellow]Server Actions[/]",
+                [
+                    new MenuEntry("Connect", 'C'),
+                    new MenuEntry("Scan Docker", 'D'),
+                    new MenuEntry("Edit", 'E'),
+                    new MenuEntry("Delete", 'L'),
+                    new MenuEntry("Back", 'B')
+                ]);
 
-            switch (choice)
+            switch (choice?.Label)
             {
-                case var c when c == MenuLabels.Connect:
+                case "Connect":
                     await _consoleHelper.RunSsh(host);
                     break;
-                case var c when c == MenuLabels.ScanDocker:
+                case "Scan Docker":
                     await ScanDockerForHost(host);
                     break;
-                case var c when c == MenuLabels.Edit:
+                case "Edit":
                     _serverCrud.Edit(host);
                     AnsiConsole.MarkupLine($"[green]\u2713[/] Server '[cyan]{Markup.Escape(host.Alias)}[/]' updated.");
                     _consoleHelper.WaitForKey();
                     break;
-                case var c when c == MenuLabels.Delete:
+                case "Delete":
                     if (_serverCrud.Delete(host))
                     {
                         AnsiConsole.MarkupLine($"[green]\u2713[/] Server '[cyan]{Markup.Escape(host.Alias)}[/]' deleted.");
@@ -114,7 +115,7 @@ public sealed class ServerMenuService : IServerMenuService
                         _consoleHelper.WaitForKey();
                     }
                     break;
-                case var c when c == MenuLabels.Back:
+                case "Back":
                     _nav.Pop();
                     return;
             }
@@ -155,7 +156,6 @@ public sealed class ServerMenuService : IServerMenuService
         AnsiConsole.MarkupLine($"[grey]Last scanned: {lastScan}[/]");
         AnsiConsole.WriteLine();
 
-        // Show container table if there are containers
         if (dockerInfo.Containers.Count > 0)
         {
             var table = new Table()
@@ -184,7 +184,6 @@ public sealed class ServerMenuService : IServerMenuService
             AnsiConsole.WriteLine();
         }
 
-        // Show compose stacks table if there are stacks
         if (dockerInfo.ComposeStacks.Count > 0)
         {
             var stackTable = new Table()
@@ -211,7 +210,6 @@ public sealed class ServerMenuService : IServerMenuService
 
     private async Task ScanDockerForHost(ServerHost host)
     {
-        // Password auth doesn't support non-interactive remote commands
         if (host.AuthType == AuthType.Password)
         {
             AnsiConsole.MarkupLine("[yellow]Docker scan is not supported for password-authenticated hosts.[/]");
@@ -220,7 +218,6 @@ public sealed class ServerMenuService : IServerMenuService
             return;
         }
 
-        // Prompt for sudo password if not already set for this session
         if (string.IsNullOrEmpty(host.SudoPassword))
         {
             var needsSudo = AnsiConsole.Confirm("Does this host require [yellow]sudo[/] with a password?", false);

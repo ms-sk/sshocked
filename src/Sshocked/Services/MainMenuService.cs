@@ -15,6 +15,7 @@ public sealed class MainMenuService : IMainMenuService
     private readonly ITableRendererService _tableRenderer;
     private readonly IHostSelectorService _hostSelector;
     private readonly IConsoleHelperService _consoleHelper;
+    private readonly IKeyboardShortcutService _keyboardShortcut;
     private readonly ILogger<MainMenuService> _logger;
 
     public MainMenuService(
@@ -26,6 +27,7 @@ public sealed class MainMenuService : IMainMenuService
         ITableRendererService tableRenderer,
         IHostSelectorService hostSelector,
         IConsoleHelperService consoleHelper,
+        IKeyboardShortcutService keyboardShortcut,
         ILogger<MainMenuService> logger)
     {
         _configRepository = configRepository;
@@ -36,6 +38,7 @@ public sealed class MainMenuService : IMainMenuService
         _tableRenderer = tableRenderer;
         _hostSelector = hostSelector;
         _consoleHelper = consoleHelper;
+        _keyboardShortcut = keyboardShortcut;
         _logger = logger;
     }
 
@@ -55,29 +58,27 @@ public sealed class MainMenuService : IMainMenuService
             AnsiConsole.Clear();
             _tableRenderer.RenderServerTable(config);
 
-            var choice = AnsiConsole.Prompt(
-                new SelectionPrompt<string>()
-                    .Title("[bold yellow]Main Menu[/]")
-                    .PageSize(10)
-                    .AddChoices([
-                        MenuLabels.Connect,
-                        MenuLabels.Servers,
-                        MenuLabels.Groups,
-                        MenuLabels.Exit
-                    ]));
+            var choice = _keyboardShortcut.ShowMenu(
+                "[bold yellow]Main Menu[/]",
+                [
+                    new MenuEntry("Connect", 'C'),
+                    new MenuEntry("Servers", 'S'),
+                    new MenuEntry("Groups", 'G'),
+                    new MenuEntry("Exit", 'E')
+                ]);
 
-            switch (choice)
+            switch (choice?.Label)
             {
-                case var c when c == MenuLabels.Connect:
+                case "Connect":
                     await ConnectToServer(config);
                     break;
-                case var c when c == MenuLabels.Servers:
+                case "Servers":
                     await ShowServersMenu(config);
                     break;
-                case var c when c == MenuLabels.Groups:
+                case "Groups":
                     await ShowGroupsMenu(config);
                     break;
-                case var c when c == MenuLabels.Exit:
+                case "Exit":
                     running = false;
                     break;
             }
@@ -94,33 +95,31 @@ public sealed class MainMenuService : IMainMenuService
             AnsiConsole.Clear();
             _tableRenderer.RenderServerTable(config);
 
-            var choice = AnsiConsole.Prompt(
-                new SelectionPrompt<string>()
-                    .Title("[bold yellow]Servers[/]")
-                    .PageSize(10)
-                    .AddChoices([
-                        MenuLabels.ShowAll,
-                        MenuLabels.Add,
-                        MenuLabels.Edit,
-                        MenuLabels.Delete,
-                        MenuLabels.Back
-                    ]));
+            var choice = _keyboardShortcut.ShowMenu(
+                "[bold yellow]Servers[/]",
+                [
+                    new MenuEntry("Show all", 'S'),
+                    new MenuEntry("Add", 'A'),
+                    new MenuEntry("Edit", 'E'),
+                    new MenuEntry("Delete", 'D'),
+                    new MenuEntry("Back", 'B')
+                ]);
 
-            switch (choice)
+            switch (choice?.Label)
             {
-                case var c when c == MenuLabels.ShowAll:
+                case "Show all":
                     await _serverMenu.SelectServer();
                     break;
-                case var c when c == MenuLabels.Add:
+                case "Add":
                     AddServer();
                     break;
-                case var c when c == MenuLabels.Edit:
+                case "Edit":
                     EditServer(config);
                     break;
-                case var c when c == MenuLabels.Delete:
+                case "Delete":
                     DeleteServer(config);
                     break;
-                case var c when c == MenuLabels.Back:
+                case "Back":
                     running = false;
                     break;
             }
@@ -137,33 +136,31 @@ public sealed class MainMenuService : IMainMenuService
             AnsiConsole.Clear();
             _tableRenderer.RenderServerTable(config);
 
-            var choice = AnsiConsole.Prompt(
-                new SelectionPrompt<string>()
-                    .Title("[bold yellow]Groups[/]")
-                    .PageSize(10)
-                    .AddChoices([
-                        MenuLabels.ShowGroups,
-                        MenuLabels.Add,
-                        MenuLabels.Edit,
-                        MenuLabels.Delete,
-                        MenuLabels.Back
-                    ]));
+            var choice = _keyboardShortcut.ShowMenu(
+                "[bold yellow]Groups[/]",
+                [
+                    new MenuEntry("Show groups", 'S'),
+                    new MenuEntry("Add", 'A'),
+                    new MenuEntry("Edit", 'E'),
+                    new MenuEntry("Delete", 'D'),
+                    new MenuEntry("Back", 'B')
+                ]);
 
-            switch (choice)
+            switch (choice?.Label)
             {
-                case var c when c == MenuLabels.ShowGroups:
+                case "Show groups":
                     await _groupMenu.Browse();
                     break;
-                case var c when c == MenuLabels.Add:
+                case "Add":
                     CreateNewGroup(config);
                     break;
-                case var c when c == MenuLabels.Edit:
+                case "Edit":
                     RenameGroup(config);
                     break;
-                case var c when c == MenuLabels.Delete:
+                case "Delete":
                     DeleteGroup(config);
                     break;
-                case var c when c == MenuLabels.Back:
+                case "Back":
                     running = false;
                     break;
             }
@@ -185,31 +182,28 @@ public sealed class MainMenuService : IMainMenuService
             return;
         }
 
-        // If host has Docker containers, offer to connect to a container instead
         var containers = host.DockerInfo?.Containers;
         if (containers is { Count: > 0 })
         {
-            var containerLabels = containers
-                .Select(c => (Container: c, Label: $"{Markup.Escape(c.Name)}  [grey]({c.Image})[/]"))
+            var containerEntries = containers
+                .Select(c => (Container: c, Entry: new MenuEntry($"{Markup.Escape(c.Name)}  [grey]({c.Image})[/]")))
                 .ToList();
 
-            var choices = containerLabels.Select(cl => cl.Label).ToList();
-            choices.Insert(0, MenuLabels.Connect);
-            choices.Add(MenuLabels.Back);
+            var choices = new List<MenuEntry> { new("Connect", 'C') };
+            choices.AddRange(containerEntries.Select(ce => ce.Entry));
+            choices.Add(new MenuEntry("Back", 'B'));
 
-            var selectedLabel = AnsiConsole.Prompt(
-                new SelectionPrompt<string>()
-                    .Title($"[bold yellow]Connect to {Markup.Escape(host.Alias)}[/]")
-                    .PageSize(10)
-                    .AddChoices(choices));
+            var selected = _keyboardShortcut.ShowMenu(
+                $"[bold yellow]Connect to {Markup.Escape(host.Alias)}[/]",
+                choices);
 
-            if (selectedLabel == MenuLabels.Connect)
+            if (selected?.Label == "Connect")
             {
                 await _consoleHelper.RunSsh(host);
             }
-            else if (selectedLabel != MenuLabels.Back)
+            else if (selected?.Label != "Back" && selected is not null)
             {
-                var container = containerLabels.First(cl => cl.Label == selectedLabel).Container;
+                var container = containerEntries.First(ce => ce.Entry.Label == selected.Label).Container;
                 await ShowContainerActions(host, container);
             }
 
@@ -221,22 +215,20 @@ public sealed class MainMenuService : IMainMenuService
 
     private async Task ShowContainerActions(ServerHost host, ContainerModel container)
     {
-        var choice = AnsiConsole.Prompt(
-            new SelectionPrompt<string>()
-                .Title($"[bold yellow]{Markup.Escape(container.Name)}[/]")
-                .PageSize(10)
-                .AddChoices([
-                    "[[E]] Exec (sh)",
-                    "[[L]] Logs (-f)",
-                    MenuLabels.Back
-                ]));
+        var choice = _keyboardShortcut.ShowMenu(
+            $"[bold yellow]{Markup.Escape(container.Name)}[/]",
+            [
+                new MenuEntry("Exec (sh)", 'E'),
+                new MenuEntry("Logs (-f)", 'L'),
+                new MenuEntry("Back", 'B')
+            ]);
 
-        switch (choice)
+        switch (choice?.Label)
         {
-            case "[[E]] Exec (sh)":
+            case "Exec (sh)":
                 await _consoleHelper.RunDockerExec(host, container);
                 break;
-            case "[[L]] Logs (-f)":
+            case "Logs (-f)":
                 await _consoleHelper.RunDockerLogs(host, container);
                 break;
         }
