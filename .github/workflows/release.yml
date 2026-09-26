@@ -60,12 +60,12 @@ jobs:
         if: matrix.archive-ext == 'tar.gz'
         run: |
           cd ./publish
-          tar -czvf ../sshocked-${{ matrix.rid }}.tar.gz sshocked
+          tar -czvf ../sshocked-${{ matrix.rid }}.tar.gz ssk
 
       - name: Package Binary (zip)
         if: matrix.archive-ext == 'zip'
         run: |
-          Compress-Archive -Path ./publish/sshocked.exe -DestinationPath sshocked-${{ matrix.rid }}.zip
+          Compress-Archive -Path ./publish/ssk.exe -DestinationPath sshocked-${{ matrix.rid }}.zip
         shell: pwsh
 
       - name: Upload Artifact
