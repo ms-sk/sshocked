@@ -46,14 +46,12 @@ public sealed class ProcessService : IProcessService
 
     public async Task<string> RunSshCommand(ServerHost host, string command)
     {
-        var sshArgs = BuildSshArgs(host);
-
         _logger.LogInformation("Running remote command on {Alias}: {Command}", host.Alias, command);
 
         var psi = new ProcessStartInfo
         {
             FileName = "ssh",
-            Arguments = $"{sshArgs} -- {command}",
+            Arguments = $"{BuildSshArgs(host)} -- {command}",
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,

@@ -39,12 +39,12 @@ public sealed class MainMenuService : IMainMenuService
         _logger = logger;
     }
 
-    public Task ShowAsync()
+    public async Task Show()
     {
         if (!AnsiConsole.Profile.Capabilities.Interactive)
         {
             _logger.LogWarning("Terminal is not interactive -- skipping main menu");
-            return Task.CompletedTask;
+            return;
         }
 
         var running = true;
@@ -69,24 +69,22 @@ public sealed class MainMenuService : IMainMenuService
             switch (choice)
             {
                 case var c when c == MenuLabels.Connect:
-                    ConnectToServer(config);
+                    await ConnectToServer(config);
                     break;
                 case var c when c == MenuLabels.Servers:
-                    ShowServersMenu(config);
+                    await ShowServersMenu(config);
                     break;
                 case var c when c == MenuLabels.Groups:
-                    ShowGroupsMenu(config);
+                    await ShowGroupsMenu(config);
                     break;
                 case var c when c == MenuLabels.Exit:
                     running = false;
                     break;
             }
         }
-
-        return Task.CompletedTask;
     }
 
-    private void ShowServersMenu(AppConfig config)
+    private async Task ShowServersMenu(AppConfig config)
     {
         var running = true;
 
@@ -111,7 +109,7 @@ public sealed class MainMenuService : IMainMenuService
             switch (choice)
             {
                 case var c when c == MenuLabels.ShowAll:
-                    _serverMenu.SelectServer();
+                    await _serverMenu.SelectServer();
                     break;
                 case var c when c == MenuLabels.Add:
                     AddServer();
@@ -129,7 +127,7 @@ public sealed class MainMenuService : IMainMenuService
         }
     }
 
-    private void ShowGroupsMenu(AppConfig config)
+    private async Task ShowGroupsMenu(AppConfig config)
     {
         var running = true;
 
@@ -154,7 +152,7 @@ public sealed class MainMenuService : IMainMenuService
             switch (choice)
             {
                 case var c when c == MenuLabels.ShowGroups:
-                    _groupMenu.Browse();
+                    await _groupMenu.Browse();
                     break;
                 case var c when c == MenuLabels.Add:
                     CreateNewGroup(config);
@@ -172,7 +170,7 @@ public sealed class MainMenuService : IMainMenuService
         }
     }
 
-    private void ConnectToServer(AppConfig config)
+    private async Task ConnectToServer(AppConfig config)
     {
         if (config.Hosts.Count == 0)
         {
@@ -207,21 +205,21 @@ public sealed class MainMenuService : IMainMenuService
 
             if (selectedLabel == MenuLabels.Connect)
             {
-                _consoleHelper.RunSsh(host);
+                await _consoleHelper.RunSsh(host);
             }
             else if (selectedLabel != MenuLabels.Back)
             {
                 var container = containerLabels.First(cl => cl.Label == selectedLabel).Container;
-                ShowContainerActions(host, container);
+                await ShowContainerActions(host, container);
             }
 
             return;
         }
 
-        _consoleHelper.RunSsh(host);
+        await _consoleHelper.RunSsh(host);
     }
 
-    private void ShowContainerActions(ServerHost host, ContainerModel container)
+    private async Task ShowContainerActions(ServerHost host, ContainerModel container)
     {
         var choice = AnsiConsole.Prompt(
             new SelectionPrompt<string>()
@@ -236,10 +234,10 @@ public sealed class MainMenuService : IMainMenuService
         switch (choice)
         {
             case "[[E]] Exec (sh)":
-                _consoleHelper.RunDockerExec(host, container);
+                await _consoleHelper.RunDockerExec(host, container);
                 break;
             case "[[L]] Logs (-f)":
-                _consoleHelper.RunDockerLogs(host, container);
+                await _consoleHelper.RunDockerLogs(host, container);
                 break;
         }
     }

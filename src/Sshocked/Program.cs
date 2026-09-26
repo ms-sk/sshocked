@@ -29,7 +29,7 @@ try
     {
         // CLI mode: dispatch and exit
         var dispatcher = serviceProvider.GetRequiredService<ICliDispatcherService>();
-        await dispatcher.DispatchAsync(parseResult);
+        await dispatcher.Dispatch(parseResult);
         logger.LogInformation("CLI dispatch complete");
         return;
     }
@@ -41,7 +41,7 @@ try
     _ = AnsiConsole.Profile.Capabilities;
 
     var appRunner = serviceProvider.GetRequiredService<IAppRunner>();
-    await appRunner.RunAsync();
+    await appRunner.Run();
     logger.LogInformation("Application shutdown complete");
 }
 catch (Exception ex)

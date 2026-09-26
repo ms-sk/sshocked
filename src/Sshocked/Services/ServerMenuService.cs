@@ -36,7 +36,7 @@ public sealed class ServerMenuService : IServerMenuService
         _logger = logger;
     }
 
-    public void SelectServer()
+    public async Task SelectServer()
     {
         var config = _configRepository.Load();
         if (config.Hosts.Count == 0)
@@ -61,11 +61,11 @@ public sealed class ServerMenuService : IServerMenuService
                 return;
             }
 
-            ShowServerActions(config, host);
+            await ShowServerActions(config, host);
         }
     }
 
-    public void ShowServerActions(AppConfig config, ServerHost host)
+    public async Task ShowServerActions(AppConfig config, ServerHost host)
     {
         _nav.Push(ViewType.ServerDetail);
 
@@ -90,10 +90,10 @@ public sealed class ServerMenuService : IServerMenuService
             switch (choice)
             {
                 case var c when c == MenuLabels.Connect:
-                    _consoleHelper.RunSsh(host);
+                    await _consoleHelper.RunSsh(host);
                     break;
                 case var c when c == MenuLabels.ScanDocker:
-                    ScanDockerForHost(host);
+                    await ScanDockerForHost(host);
                     break;
                 case var c when c == MenuLabels.Edit:
                     _serverCrud.Edit(host);
@@ -209,8 +209,17 @@ public sealed class ServerMenuService : IServerMenuService
         }
     }
 
-    private void ScanDockerForHost(ServerHost host)
+    private async Task ScanDockerForHost(ServerHost host)
     {
+        // Password auth doesn't support non-interactive remote commands
+        if (host.AuthType == AuthType.Password)
+        {
+            AnsiConsole.MarkupLine("[yellow]Docker scan is not supported for password-authenticated hosts.[/]");
+            AnsiConsole.MarkupLine("[grey]Use SSH key or agent authentication to enable Docker scanning.[/]");
+            _consoleHelper.WaitForKey();
+            return;
+        }
+
         // Prompt for sudo password if not already set for this session
         if (string.IsNullOrEmpty(host.SudoPassword))
         {
@@ -226,8 +235,7 @@ public sealed class ServerMenuService : IServerMenuService
         AnsiConsole.MarkupLine("[yellow]Scanning host for Docker containers...[/]");
         AnsiConsole.MarkupLine("[grey]This may take a few seconds.[/]");
 
-        // Run the scan synchronously in the TUI context
-        var info = _dockerService.Scan(host).GetAwaiter().GetResult();
+        var info = await _dockerService.Scan(host);
 
         if (!info.DockerAvailable)
         {

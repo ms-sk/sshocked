@@ -1,3 +1,8 @@
+---
+name: authentication
+description: SSH authentication methods — key, password, agent, and custom options. Use when working with SSH connection configuration.
+---
+
 # Authentication Methods
 
 Each server supports a configurable authentication method:

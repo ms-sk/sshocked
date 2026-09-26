@@ -1,3 +1,8 @@
+---
+name: code-refactoring
+description: Cleanup standards, type design, modularization, and acceptance criteria. Use when refactoring or cleaning up C# code.
+---
+
 # Code Refactoring & Cleanup Standards
 
 ## Code Minimization & Dead Code Removal

@@ -1,3 +1,8 @@
+---
+name: commands
+description: Command reference, naming conventions, and how to add new commands. Use when adding a new command or service.
+---
+
 # Commands
 
 Each command is implemented as a dedicated service interface + class.

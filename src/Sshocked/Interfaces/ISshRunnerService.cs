@@ -4,5 +4,5 @@ namespace Sshocked.Interfaces;
 
 public interface ISshRunnerService
 {
-    Task ConnectAsync(ServerHost host);
+    Task Connect(ServerHost host);
 }

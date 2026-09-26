@@ -1,3 +1,8 @@
+---
+name: navigation
+description: View stack, sub-menus, and [[B]] Back pattern for the sshocked TUI. Use when adding or modifying menu navigation.
+---
+
 # Navigation
 
 The main menu uses a view stack for consistent sub-menu navigation:

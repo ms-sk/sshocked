@@ -36,7 +36,7 @@ public sealed class GroupMenuService : IGroupMenuService
         _logger = logger;
     }
 
-    public void Browse()
+    public async Task Browse()
     {
         var groups = _groupManagement.GetAll();
         if (groups.Count == 0)
@@ -72,11 +72,11 @@ public sealed class GroupMenuService : IGroupMenuService
             }
 
             var group = groups.First(g => g.Name == selectedName);
-            ShowGroupDetail(config, group);
+            await ShowGroupDetail(config, group);
         }
     }
 
-    private void ShowGroupDetail(AppConfig config, ServerGroup group)
+    private async Task ShowGroupDetail(AppConfig config, ServerGroup group)
     {
         _nav.Push(ViewType.ServerDetail);
 
@@ -117,7 +117,7 @@ public sealed class GroupMenuService : IGroupMenuService
                     SelectServerFromGroup(config, group);
                     break;
                 case var c when c == MenuLabels.ConnectAll:
-                    ConnectAll(groupHosts);
+                    await ConnectAll(groupHosts);
                     break;
                 case var c when c == MenuLabels.Back:
                     _nav.Pop();
@@ -148,12 +148,12 @@ public sealed class GroupMenuService : IGroupMenuService
         _serverMenu.ShowServerActions(config, host);
     }
 
-    private void ConnectAll(List<ServerHost> hosts)
+    private async Task ConnectAll(List<ServerHost> hosts)
     {
         foreach (var host in hosts)
         {
             AnsiConsole.MarkupLine($"Connecting to [cyan]{Markup.Escape(host.Alias)}[/]...");
-            _consoleHelper.RunSsh(host);
+            await _consoleHelper.RunSsh(host);
         }
     }
 }
