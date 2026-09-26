@@ -47,7 +47,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang zlib1g-dev
           if [ "${{ matrix.rid }}" = "linux-arm64" ]; then
-            sudo apt-get install -y gcc-aarch64-linux-gnu binutils
+            sudo apt-get install -y gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+            # The native objcopy on x64 can't handle ARM64 binaries.
+            # Use the cross-toolchain's aarch64-linux-gnu-objcopy instead.
+            sudo update-alternatives --install /usr/bin/objcopy objcopy /usr/bin/aarch64-linux-gnu-objcopy 100
           fi
 
       - name: Publish Native AOT Binary
