@@ -1,0 +1,26 @@
+sshocked
+Copyright (C) 2025 ms-sk
+Licensed under the GNU General Public License v3.0.
+
+This product includes the following third-party dependencies:
+
+---
+
+Spectre.Console
+Copyright (c) Patrik Svensson, Phil Scott, Nils Andresen, Cédric Luthi
+Licensed under the MIT License.
+https://github.com/spectreconsole/spectre.console
+
+SixLabors.ImageSharp
+Copyright (c) Six Labors
+Licensed under the Apache License, Version 2.0 when distributed
+as part of Spectre.Console. For all other usage, the Six Labors
+Split License applies.
+https://github.com/SixLabors/ImageSharp
+
+Microsoft.Extensions.DependencyInjection
+Microsoft.Extensions.Logging
+Microsoft.Extensions.Logging.Abstractions
+Copyright (c) Microsoft Corporation
+Licensed under the MIT License.
+https://github.com/dotnet/runtime

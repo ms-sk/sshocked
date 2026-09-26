@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/ms-sk/sshocked/actions/workflows/ci.yml/badge.svg)](https://github.com/ms-sk/sshocked/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/ms-sk/sshocked?logo=github)](https://github.com/ms-sk/sshocked/releases)
-[![License](https://img.shields.io/github/license/ms-sk/sshocked)](LICENSE)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
 **sshocked** – Shelling into servers and containers with lightning speed.
 
@@ -37,7 +37,31 @@ A .NET console application that provides a fast, interactive terminal UI for man
 
 ## Quickstart
 
-### Install from Release
+### One-Line Install
+
+**Linux & macOS:**
+```bash
+curl -fsSL https://github.com/ms-sk/sshocked/releases/latest/download/install.sh | sudo sh
+```
+
+**Windows (PowerShell as Administrator):**
+```powershell
+irm https://github.com/ms-sk/sshocked/releases/latest/download/install.ps1 | iex
+```
+
+This automatically detects your OS and architecture, downloads the correct binary, and installs it to `/usr/local/bin/ssk` (Linux/macOS) or `%ProgramFiles%\sshocked\ssk.exe` (Windows, added to PATH).
+
+### Install via .deb Package (Debian/Ubuntu)
+
+Download the `.deb` for your architecture from the [Releases page](https://github.com/ms-sk/sshocked/releases) and install:
+
+```bash
+sudo apt install ./sshocked-linux-x64.deb
+# or
+sudo dpkg -i sshocked-linux-x64.deb
+```
+
+### Manual Install from Release
 
 1. Download the latest archive for your platform from the [Releases page](https://github.com/ms-sk/sshocked/releases)
 2. Extract the binary and add it to your `PATH`
@@ -155,4 +179,16 @@ src/Sshocked/
 
 ## License
 
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **GNU General Public License v3.0** — see the [LICENSE](LICENSE) file for details.
+
+For commercial / enterprise licensing inquiries, contact the maintainer.
+
+### Third-Party Dependencies
+
+This project uses the following third-party libraries. See the [NOTICE](NOTICE) file for full attribution and license details.
+
+| Dependency | License |
+|---|---|
+| Spectre.Console | MIT |
+| SixLabors.ImageSharp | Apache 2.0 / Six Labors Split License |
+| Microsoft.Extensions.* | MIT |

@@ -74,20 +74,66 @@ jobs:
           Compress-Archive -Path ./publish/ssk.exe -DestinationPath sshocked-${{ matrix.rid }}.zip
         shell: pwsh
 
+      - name: Build .deb Package (Linux)
+        if: startsWith(matrix.rid, 'linux-')
+        run: |
+          # Determine architecture for .deb
+          case "${{ matrix.rid }}" in
+            linux-x64)   DEB_ARCH="amd64" ;;
+            linux-arm64) DEB_ARCH="arm64" ;;
+          esac
+
+          # Extract version from tag (strip leading 'v')
+          VERSION="${GITHUB_REF_NAME#v}"
+
+          PKG_DIR="$(mktemp -d)"
+          mkdir -p "${PKG_DIR}/DEBIAN"
+          mkdir -p "${PKG_DIR}/usr/local/bin"
+
+          # Copy the binary
+          cp ./publish/ssk "${PKG_DIR}/usr/local/bin/ssk"
+
+          # Generate control file
+          cat > "${PKG_DIR}/DEBIAN/control" <<-EOF
+          Package: ssk
+          Version: ${VERSION}
+          Section: net
+          Priority: optional
+          Architecture: ${DEB_ARCH}
+          Maintainer: ms-sk
+          Description: Shell into servers and containers with lightning speed
+           A fast, interactive terminal UI for managing and connecting to SSH
+           servers and containers. Organize hosts into groups, import from
+           OpenSSH config, and launch SSH sessions.
+          EOF
+
+          # Build the .deb
+          dpkg-deb --build "${PKG_DIR}" "sshocked-${{ matrix.rid }}.deb"
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v7.0.1
         with:
           name: sshocked-${{ matrix.rid }}
-          path: sshocked-${{ matrix.rid }}.${{ matrix.archive-ext }}
+          path: |
+            sshocked-${{ matrix.rid }}.${{ matrix.archive-ext }}
+            sshocked-${{ matrix.rid }}.deb
 
   create-release:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7.0.1
+
       - name: Download All Artifacts
         uses: actions/download-artifact@v8.0.1
         with:
           path: ./artifacts
+
+      - name: Attach Install Scripts
+        run: |
+          cp install.sh ./artifacts/install.sh
+          cp install.ps1 ./artifacts/install.ps1
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
