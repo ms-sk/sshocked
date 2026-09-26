@@ -26,6 +26,17 @@ public sealed class DockerService : IDockerService
         _logger.LogInformation("Scanning host {Alias} for Docker containers", host.Alias);
 
         var info = new DockerHostInfo();
+
+        // Password auth doesn't support non-interactive remote commands
+        if (host.AuthType == AuthType.Password)
+        {
+            _logger.LogInformation("Skipping Docker scan for {Alias}: password auth not supported for non-interactive commands", host.Alias);
+            info.DockerAvailable = false;
+            info.LastScannedAt = DateTime.UtcNow;
+            CacheAndSave(host, info);
+            return info;
+        }
+
         var sudo = BuildSudoPrefix(host.SudoPassword);
 
         // Step 1: Check if Docker is available
