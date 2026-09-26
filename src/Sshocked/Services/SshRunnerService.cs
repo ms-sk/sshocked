@@ -18,6 +18,6 @@ public sealed class SshRunnerService : ISshRunnerService
     public async Task ConnectAsync(ServerHost host)
     {
         _logger.LogInformation("Connecting to {Alias}", host.Alias);
-        await _processService.RunSshAsync(host);
+        await _processService.RunSsh(host);
     }
 }

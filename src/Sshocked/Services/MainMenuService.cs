@@ -187,7 +187,61 @@ public sealed class MainMenuService : IMainMenuService
             return;
         }
 
+        // If host has Docker containers, offer to connect to a container instead
+        var containers = host.DockerInfo?.Containers;
+        if (containers is { Count: > 0 })
+        {
+            var containerLabels = containers
+                .Select(c => (Container: c, Label: $"{Markup.Escape(c.Name)}  [grey]({c.Image})[/]"))
+                .ToList();
+
+            var choices = containerLabels.Select(cl => cl.Label).ToList();
+            choices.Insert(0, MenuLabels.Connect);
+            choices.Add(MenuLabels.Back);
+
+            var selectedLabel = AnsiConsole.Prompt(
+                new SelectionPrompt<string>()
+                    .Title($"[bold yellow]Connect to {Markup.Escape(host.Alias)}[/]")
+                    .PageSize(10)
+                    .AddChoices(choices));
+
+            if (selectedLabel == MenuLabels.Connect)
+            {
+                _consoleHelper.RunSsh(host);
+            }
+            else if (selectedLabel != MenuLabels.Back)
+            {
+                var container = containerLabels.First(cl => cl.Label == selectedLabel).Container;
+                ShowContainerActions(host, container);
+            }
+
+            return;
+        }
+
         _consoleHelper.RunSsh(host);
+    }
+
+    private void ShowContainerActions(ServerHost host, ContainerModel container)
+    {
+        var choice = AnsiConsole.Prompt(
+            new SelectionPrompt<string>()
+                .Title($"[bold yellow]{Markup.Escape(container.Name)}[/]")
+                .PageSize(10)
+                .AddChoices([
+                    "[[E]] Exec (sh)",
+                    "[[L]] Logs (-f)",
+                    MenuLabels.Back
+                ]));
+
+        switch (choice)
+        {
+            case "[[E]] Exec (sh)":
+                _consoleHelper.RunDockerExec(host, container);
+                break;
+            case "[[L]] Logs (-f)":
+                _consoleHelper.RunDockerLogs(host, container);
+                break;
+        }
     }
 
     private void EditServer(AppConfig config)

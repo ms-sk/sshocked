@@ -1,0 +1,205 @@
+using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Sshocked.Interfaces;
+using Sshocked.Models;
+
+namespace Sshocked.Services;
+
+public sealed class DockerService : IDockerService
+{
+    private readonly IProcessService _processService;
+    private readonly IConfigRepository _configRepository;
+    private readonly ILogger<DockerService> _logger;
+
+    public DockerService(
+        IProcessService processService,
+        IConfigRepository configRepository,
+        ILogger<DockerService> logger)
+    {
+        _processService = processService;
+        _configRepository = configRepository;
+        _logger = logger;
+    }
+
+    public async Task<DockerHostInfo> Scan(ServerHost host)
+    {
+        _logger.LogInformation("Scanning host {Alias} for Docker containers", host.Alias);
+
+        var info = new DockerHostInfo();
+        var sudo = BuildSudoPrefix(host.SudoPassword);
+
+        // Step 1: Check if Docker is available
+        var dockerInfoOutput = await _processService.RunSshCommand(host, $"{sudo}docker info --format '{{{{json .}}}}' 2>/dev/null || echo 'DOCKER_NOT_AVAILABLE'");
+        dockerInfoOutput = dockerInfoOutput.Trim();
+
+        if (dockerInfoOutput == "DOCKER_NOT_AVAILABLE" || string.IsNullOrEmpty(dockerInfoOutput))
+        {
+            _logger.LogInformation("Docker is not available on host {Alias}", host.Alias);
+            info.DockerAvailable = false;
+            info.LastScannedAt = DateTime.UtcNow;
+            CacheAndSave(host, info);
+            return info;
+        }
+
+        info.DockerAvailable = true;
+
+        // Parse docker info JSON
+        try
+        {
+            using var doc = JsonDocument.Parse(dockerInfoOutput);
+            var root = doc.RootElement;
+
+            if (root.TryGetProperty("ServerVersion", out var version))
+                info.ServerVersion = version.GetString();
+
+            if (root.TryGetProperty("OSType", out var osType))
+                info.OsType = osType.GetString();
+
+            if (root.TryGetProperty("Architecture", out var arch))
+                info.Architecture = arch.GetString();
+
+            if (root.TryGetProperty("ContainersRunning", out var running))
+                info.ContainersRunning = running.GetInt32();
+
+            if (root.TryGetProperty("Containers", out var total))
+                info.ContainersTotal = total.GetInt32();
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "Failed to parse docker info JSON from {Alias}", host.Alias);
+        }
+
+        // Step 2: List containers
+        var containersOutput = await _processService.RunSshCommand(host, $"{sudo}docker ps -a --format '{{{{json .}}}}' 2>/dev/null");
+        info.Containers = ParseContainerJson(containersOutput);
+
+        // Step 3: List Compose stacks
+        var composeOutput = await _processService.RunSshCommand(host, $"{sudo}docker compose ls --format '{{{{json .}}}}' 2>/dev/null");
+        info.ComposeStacks = ParseComposeStackJson(composeOutput);
+
+        info.LastScannedAt = DateTime.UtcNow;
+        CacheAndSave(host, info);
+
+        _logger.LogInformation("Scan complete for {Alias}: {Count} containers, {Stacks} compose stacks",
+            host.Alias, info.Containers.Count, info.ComposeStacks.Count);
+
+        return info;
+    }
+
+    public Task Exec(ServerHost host, ContainerModel container)
+    {
+        var sudo = BuildSudoPrefix(host.SudoPassword);
+        var command = $"{sudo}docker exec -it {container.Name} sh";
+        return _processService.RunSshInteractive(host, command);
+    }
+
+    public Task Logs(ServerHost host, ContainerModel container)
+    {
+        var sudo = BuildSudoPrefix(host.SudoPassword);
+        var command = $"{sudo}docker logs -f {container.Name}";
+        return _processService.RunSshInteractive(host, command);
+    }
+
+    private List<ContainerModel> ParseContainerJson(string raw)
+    {
+        var containers = new List<ContainerModel>();
+
+        if (string.IsNullOrWhiteSpace(raw))
+            return containers;
+
+        var lines = raw.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var line in lines)
+        {
+            var trimmed = line.Trim();
+            if (string.IsNullOrEmpty(trimmed))
+                continue;
+
+            try
+            {
+                using var doc = JsonDocument.Parse(trimmed);
+                var root = doc.RootElement;
+
+                var container = new ContainerModel
+                {
+                    ContainerId = root.TryGetProperty("ID", out var id) ? id.GetString() ?? string.Empty : string.Empty,
+                    Name = root.TryGetProperty("Names", out var names) ? names.GetString() ?? string.Empty : string.Empty,
+                    Image = root.TryGetProperty("Image", out var image) ? image.GetString() ?? string.Empty : string.Empty,
+                    Status = root.TryGetProperty("Status", out var status) ? status.GetString() ?? string.Empty : string.Empty,
+                    Ports = root.TryGetProperty("Ports", out var ports) ? ports.GetString() : null,
+                    ComposeProject = root.TryGetProperty("ComposeProject", out var project) ? project.GetString() : null
+                };
+
+                if (container.Name.StartsWith('/'))
+                    container.Name = container.Name[1..];
+
+                containers.Add(container);
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning(ex, "Failed to parse container JSON line: {Line}", trimmed);
+            }
+        }
+
+        return containers;
+    }
+
+    private List<ComposeStackModel> ParseComposeStackJson(string raw)
+    {
+        var stacks = new List<ComposeStackModel>();
+
+        if (string.IsNullOrWhiteSpace(raw))
+            return stacks;
+
+        var lines = raw.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var line in lines)
+        {
+            var trimmed = line.Trim();
+            if (string.IsNullOrEmpty(trimmed))
+                continue;
+
+            try
+            {
+                using var doc = JsonDocument.Parse(trimmed);
+                var root = doc.RootElement;
+
+                var stack = new ComposeStackModel
+                {
+                    Name = root.TryGetProperty("Name", out var name) ? name.GetString() ?? string.Empty : string.Empty,
+                    Status = root.TryGetProperty("Status", out var status) ? status.GetString() ?? string.Empty : string.Empty,
+                    ConfigFiles = root.TryGetProperty("ConfigFiles", out var config) ? config.GetString() : null
+                };
+
+                stacks.Add(stack);
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning(ex, "Failed to parse compose stack JSON line: {Line}", trimmed);
+            }
+        }
+
+        return stacks;
+    }
+
+    private void CacheAndSave(ServerHost host, DockerHostInfo info)
+    {
+        var config = _configRepository.Load();
+
+        var existing = config.Hosts.FirstOrDefault(h => h.Id == host.Id);
+        if (existing is not null)
+        {
+            existing.DockerInfo = info;
+            _configRepository.Save(config);
+        }
+    }
+
+    private static string BuildSudoPrefix(string? sudoPassword)
+    {
+        if (string.IsNullOrEmpty(sudoPassword))
+            return "sudo ";
+
+        var escaped = sudoPassword.Replace("'", "'\\''");
+        return $"echo '{escaped}' | sudo -S ";
+    }
+}

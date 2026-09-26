@@ -24,6 +24,12 @@
 - Strip out all code comments unless they document non-obvious domain complexities or critical constraints.
 - If you see magic strings, create a static class for them.
 
+## Async Naming Convention
+
+- Methods that return `Task` or `Task<T>` **must not** have an `Async` suffix.
+- The `Async` suffix is reserved for methods that are truly asynchronous (i.e., contain `await`). Methods that only return a `Task` without `await` still get no suffix.
+- This applies to both interface declarations and implementations.
+
 ## Code Formatting
 
 - Run a full, clean code auto-format across all modified files prior to completion.
