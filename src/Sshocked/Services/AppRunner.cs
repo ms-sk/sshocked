@@ -4,38 +4,18 @@ using Sshocked.Models;
 
 namespace Sshocked.Services;
 
-public sealed class AppRunner : IAppRunner
+public sealed class AppRunner(IConfigRepository configRepository, ISshConfigImporter sshConfigImporter, IMainMenuService mainMenu, IConsoleWriterService console, ILogger<AppRunner> logger) : IAppRunner
 {
-    private readonly IConfigRepository _configRepository;
-    private readonly ISshConfigImporter _sshConfigImporter;
-    private readonly IMainMenuService _mainMenu;
-    private readonly IConsoleWriterService _console;
-    private readonly ILogger<AppRunner> _logger;
-
-    public AppRunner(
-        IConfigRepository configRepository,
-        ISshConfigImporter sshConfigImporter,
-        IMainMenuService mainMenu,
-        IConsoleWriterService console,
-        ILogger<AppRunner> logger)
-    {
-        _configRepository = configRepository;
-        _sshConfigImporter = sshConfigImporter;
-        _mainMenu = mainMenu;
-        _console = console;
-        _logger = logger;
-    }
-
     public async Task Run()
     {
-        _logger.LogInformation("AppRunner starting");
+        logger.LogInformation("AppRunner starting");
 
-        var config = _configRepository.Load();
+        var config = configRepository.Load();
 
         if (config.IsFirstStart)
         {
-            _console.WriteLine("Welcome to sshocked! Your configuration has been initialized.");
-            _logger.LogInformation("First start detected");
+            console.WriteLine("Welcome to sshocked! Your configuration has been initialized.");
+            logger.LogInformation("First start detected");
 
             var sshConfigPath = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
@@ -43,29 +23,29 @@ public sealed class AppRunner : IAppRunner
 
             if (File.Exists(sshConfigPath))
             {
-                _console.Write($"Found SSH config at {sshConfigPath}. Import hosts? (y/N): ");
-                var response = _console.ReadLine()?.Trim().ToLowerInvariant();
+                console.Write($"Found SSH config at {sshConfigPath}. Import hosts? (y/N): ");
+                var response = console.ReadLine()?.Trim().ToLowerInvariant();
 
                 if (response is "y" or "yes")
                 {
-                    var importedHosts = _sshConfigImporter.Import();
+                    var importedHosts = sshConfigImporter.Import();
                     config.Hosts.AddRange(importedHosts);
-                    _console.WriteLine($"Imported {importedHosts.Count} host(s) from your SSH config.");
-                    _logger.LogInformation("Imported {Count} host(s) from SSH config", importedHosts.Count);
+                    console.WriteLine($"Imported {importedHosts.Count} host(s) from your SSH config.");
+                    logger.LogInformation("Imported {Count} host(s) from SSH config", importedHosts.Count);
                 }
                 else
                 {
-                    _console.WriteLine("Skipping SSH config import.");
-                    _logger.LogInformation("User skipped SSH config import");
+                    console.WriteLine("Skipping SSH config import.");
+                    logger.LogInformation("User skipped SSH config import");
                 }
             }
 
             config.IsFirstStart = false;
-            _configRepository.Save(config);
+            configRepository.Save(config);
         }
 
-        await _mainMenu.Show();
+        await mainMenu.Show();
 
-        _logger.LogInformation("AppRunner finished");
+        logger.LogInformation("AppRunner finished");
     }
 }

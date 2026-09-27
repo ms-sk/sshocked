@@ -6,20 +6,13 @@ using Sshocked.Models;
 
 namespace Sshocked.Services;
 
-public sealed class ProcessService : IProcessService
+public sealed class ProcessService(ILogger<ProcessService> logger) : IProcessService
 {
-    private readonly ILogger<ProcessService> _logger;
-
-    public ProcessService(ILogger<ProcessService> logger)
-    {
-        _logger = logger;
-    }
-
     public async Task RunSsh(ServerHost host)
     {
         var args = BuildSshArgs(host);
 
-        _logger.LogInformation("Connecting to {Alias} via ssh {Args}", host.Alias, args);
+        logger.LogInformation("Connecting to {Alias} via ssh {Args}", host.Alias, args);
 
         var process = new Process
         {
@@ -36,17 +29,17 @@ public sealed class ProcessService : IProcessService
 
         if (process.ExitCode != 0)
         {
-            _logger.LogWarning("SSH session to {Alias} exited with code {ExitCode}", host.Alias, process.ExitCode);
+                    logger.LogWarning("SSH session to {Alias} exited with code {ExitCode}", host.Alias, process.ExitCode);
         }
         else
         {
-            _logger.LogInformation("SSH session to {Alias} completed", host.Alias);
+                    logger.LogInformation("SSH session to {Alias} completed", host.Alias);
         }
     }
 
     public async Task<string> RunSshCommand(ServerHost host, string command)
     {
-        _logger.LogInformation("Running remote command on {Alias}: {Command}", host.Alias, command);
+            logger.LogInformation("Running remote command on {Alias}: {Command}", host.Alias, command);
 
         var psi = new ProcessStartInfo
         {
@@ -58,17 +51,45 @@ public sealed class ProcessService : IProcessService
             CreateNoWindow = true
         };
 
-        var process = new Process { StartInfo = psi };
-        process.Start();
+        using var process = new Process { StartInfo = psi };
 
-        var output = await process.StandardOutput.ReadToEndAsync();
-        var error = await process.StandardError.ReadToEndAsync();
+        var outputBuilder = new StringBuilder();
+        var errorBuilder = new StringBuilder();
+
+        process.OutputDataReceived += (_, args) =>
+        {
+            if (args.Data is not null)
+            {
+                outputBuilder.AppendLine(args.Data);
+            }
+        };
+
+        process.ErrorDataReceived += (_, args) =>
+        {
+            if (args.Data is not null)
+            {
+                errorBuilder.AppendLine(args.Data);
+            }
+        };
+
+        process.Start();
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+
         await process.WaitForExitAsync();
+
+        var output = outputBuilder.ToString();
+        var error = errorBuilder.ToString();
 
         if (process.ExitCode != 0)
         {
-            _logger.LogWarning("Remote command on {Alias} exited with code {ExitCode}: {Error}",
+                    logger.LogWarning("Remote command on {Alias} exited with code {ExitCode}: {Error}",
                 host.Alias, process.ExitCode, error);
+        }
+
+        if (!string.IsNullOrEmpty(error))
+        {
+            output += error;
         }
 
         return output;
@@ -78,7 +99,7 @@ public sealed class ProcessService : IProcessService
     {
         var sshArgs = BuildSshArgs(host);
 
-        _logger.LogInformation("Running interactive remote command on {Alias}: {Command}", host.Alias, command);
+            logger.LogInformation("Running interactive remote command on {Alias}: {Command}", host.Alias, command);
 
         var process = new Process
         {
@@ -95,7 +116,7 @@ public sealed class ProcessService : IProcessService
 
         if (process.ExitCode != 0)
         {
-            _logger.LogWarning("Interactive remote command on {Alias} exited with code {ExitCode}", host.Alias, process.ExitCode);
+                    logger.LogWarning("Interactive remote command on {Alias} exited with code {ExitCode}", host.Alias, process.ExitCode);
         }
     }
 

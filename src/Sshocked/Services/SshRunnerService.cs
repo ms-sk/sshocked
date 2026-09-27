@@ -4,20 +4,11 @@ using Sshocked.Models;
 
 namespace Sshocked.Services;
 
-public sealed class SshRunnerService : ISshRunnerService
+public sealed class SshRunnerService(IProcessService processService, ILogger<SshRunnerService> logger) : ISshRunnerService
 {
-    private readonly IProcessService _processService;
-    private readonly ILogger<SshRunnerService> _logger;
-
-    public SshRunnerService(IProcessService processService, ILogger<SshRunnerService> logger)
-    {
-        _processService = processService;
-        _logger = logger;
-    }
-
     public async Task Connect(ServerHost host)
     {
-        _logger.LogInformation("Connecting to {Alias}", host.Alias);
-        await _processService.RunSsh(host);
+        logger.LogInformation("Connecting to {Alias}", host.Alias);
+        await processService.RunSsh(host);
     }
 }

@@ -5,25 +5,12 @@ using Sshocked.Models;
 
 namespace Sshocked.Services;
 
-public sealed class ServerCrudService : IServerCrudService
+public sealed class ServerCrudService(IConfigRepository configRepository, IGroupManagementService groupManagement, ILogger<ServerCrudService> logger) : IServerCrudService
 {
-    private readonly IConfigRepository _configRepository;
-    private readonly IGroupManagementService _groupManagement;
-    private readonly ILogger<ServerCrudService> _logger;
-
-    public ServerCrudService(
-        IConfigRepository configRepository,
-        IGroupManagementService groupManagement,
-        ILogger<ServerCrudService> logger)
-    {
-        _configRepository = configRepository;
-        _groupManagement = groupManagement;
-        _logger = logger;
-    }
 
     public ServerHost? Add()
     {
-        var config = _configRepository.Load();
+        var config = configRepository.Load();
 
         var alias = AnsiConsole.Prompt(
             new TextPrompt<string>("[green]Alias[/] (or [grey]leave empty to cancel[/]):")
@@ -39,7 +26,7 @@ public sealed class ServerCrudService : IServerCrudService
 
         if (string.IsNullOrWhiteSpace(alias))
         {
-            _logger.LogInformation("User cancelled add server");
+            logger.LogInformation("User cancelled add server");
             return null;
         }
 
@@ -66,7 +53,7 @@ public sealed class ServerCrudService : IServerCrudService
                     return ValidationResult.Success();
                 }));
 
-        var groups = _groupManagement.GetAll();
+        var groups = groupManagement.GetAll();
         var groupName = AnsiConsole.Prompt(
             new SelectionPrompt<string>()
                 .Title("[green]Group[/]:")
@@ -130,15 +117,15 @@ public sealed class ServerCrudService : IServerCrudService
         };
 
         config.Hosts.Add(host);
-        _configRepository.Save(config);
-        _logger.LogInformation("Added host '{Alias}' ({HostName})", host.Alias, host.HostName);
+        configRepository.Save(config);
+        logger.LogInformation("Added host '{Alias}' ({HostName})", host.Alias, host.HostName);
 
         return host;
     }
 
     public void Edit(ServerHost host)
     {
-        var config = _configRepository.Load();
+        var config = configRepository.Load();
         var existing = config.Hosts.FirstOrDefault(h => h.Id == host.Id);
         if (existing is null) return;
 
@@ -178,7 +165,7 @@ public sealed class ServerCrudService : IServerCrudService
                     return ValidationResult.Success();
                 }));
 
-        var groups = _groupManagement.GetAll();
+        var groups = groupManagement.GetAll();
         var currentGroup = groups.FirstOrDefault(g => g.Id == existing.GroupId);
         var groupName = AnsiConsole.Prompt(
             new SelectionPrompt<string>()
@@ -250,8 +237,8 @@ public sealed class ServerCrudService : IServerCrudService
         existing.IdentityFile = string.IsNullOrWhiteSpace(identityFile) ? null : identityFile.Trim();
         existing.CustomSshOptions = string.IsNullOrWhiteSpace(customSshOptions) ? null : customSshOptions.Trim();
 
-        _configRepository.Save(config);
-        _logger.LogInformation("Edited host '{Alias}'", existing.Alias);
+        configRepository.Save(config);
+        logger.LogInformation("Edited host '{Alias}'", existing.Alias);
     }
 
     public bool Delete(ServerHost host)
@@ -261,11 +248,13 @@ public sealed class ServerCrudService : IServerCrudService
 
         if (!confirmed) return false;
 
-        var config = _configRepository.Load();
+        var config = configRepository.Load();
         config.Hosts.RemoveAll(h => h.Id == host.Id);
-        _configRepository.Save(config);
-        _logger.LogInformation("Deleted host '{Alias}'", host.Alias);
+        configRepository.Save(config);
+        logger.LogInformation("Deleted host '{Alias}'", host.Alias);
 
         return true;
     }
 }
+
+

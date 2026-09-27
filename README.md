@@ -138,8 +138,13 @@ When launched without arguments, the main menu displays a table of all configure
 
 - **Arrow keys** — Move selection
 - **Enter** — Select a server or action
-- **`[[B]] Back`** — Return to the previous menu
-- **`[[E]] Exit`** — Exit the application
+- **`[C] Connect`** - Connect to a server / docker container
+- **`[G] Connect Group`** - Connect to a server / docker
+- **`[X] Run command`** - Run command on the groups
+- **`[S] Servers`** - CRUD Servers
+- **`[R] Groups`** - CRUD Groups 
+- **`[B] Back`** — Return to the previous menu
+- **`[E] Exit`** — Exit the application
 
 ### Commands
 
@@ -180,8 +185,6 @@ src/Sshocked/
 ## License
 
 This project is licensed under the **GNU General Public License v3.0** — see the [LICENSE](LICENSE) file for details.
-
-For commercial / enterprise licensing inquiries, contact the maintainer.
 
 ### Third-Party Dependencies
 

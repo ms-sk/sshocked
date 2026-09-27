@@ -80,6 +80,7 @@ static void ConfigureServices(IServiceCollection services)
     services.AddSingleton<IHostSelectorService, HostSelectorService>();
     services.AddSingleton<IConsoleHelperService, ConsoleHelperService>();
     services.AddSingleton<IKeyboardShortcutService, KeyboardShortcutService>();
+    services.AddSingleton<IMenuFactory, MenuFactory>();
     services.AddSingleton<IArgumentParserService, ArgumentParserService>();
     services.AddSingleton<ICliDispatcherService, CliDispatcherService>();
     services.AddTransient<IAppRunner, AppRunner>();

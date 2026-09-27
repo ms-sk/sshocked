@@ -2,22 +2,15 @@ using Microsoft.Extensions.Logging;
 
 namespace Sshocked.Logging;
 
-public sealed class FileLoggerProvider : ILoggerProvider
+public sealed class FileLoggerProvider(FileLoggerProcessor processor) : ILoggerProvider
 {
-    private readonly FileLoggerProcessor _processor;
-
-    public FileLoggerProvider(FileLoggerProcessor processor)
-    {
-        _processor = processor;
-    }
-
     public ILogger CreateLogger(string categoryName)
     {
-        return new FileLogger(categoryName, _processor);
+        return new FileLogger(categoryName, processor);
     }
 
     public void Dispose()
     {
-        _processor.Dispose();
+        processor.Dispose();
     }
 }

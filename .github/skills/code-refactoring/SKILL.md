@@ -16,6 +16,30 @@ description: Cleanup standards, type design, modularization, and acceptance crit
 - Eliminate all `partial` classes.
 - Explicitly mark classes as `sealed` unless active class inheritance requires otherwise.
 - Restructure files containing multiple type definitions so that each file contains **exactly one type definition**.
+- **Use primary constructors** for all classes with constructor-injected dependencies. Replace private fields assigned from constructor parameters with primary constructor parameters. Example:
+
+  ```csharp
+  // Before:
+  public sealed class MyService : IMyService
+  {
+      private readonly ILogger<MyService> _logger;
+      private readonly IOtherService _other;
+
+      public MyService(ILogger<MyService> logger, IOtherService other)
+      {
+          _logger = logger;
+          _other = other;
+      }
+
+      public void DoWork() => _logger.LogInformation("...");
+  }
+
+  // After:
+  public sealed class MyService(ILogger<MyService> logger, IOtherService other) : IMyService
+  {
+      public void DoWork() => logger.LogInformation("...");
+  }
+  ```
 
 ## File Length & Modularization
 
@@ -47,3 +71,4 @@ description: Cleanup standards, type design, modularization, and acceptance crit
 - No German terms or non-essential comments exist in code or metadata.
 - Solution builds cleanly with no warnings regarding unused symbols.
 - No `Async` suffix on any `Task`-returning method.
+- All classes with constructor-injected dependencies use primary constructors (no separate private field + constructor body pattern).

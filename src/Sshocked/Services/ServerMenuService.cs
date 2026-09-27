@@ -5,62 +5,31 @@ using Sshocked.Models;
 
 namespace Sshocked.Services;
 
-public sealed class ServerMenuService : IServerMenuService
+public sealed class ServerMenuService(IConfigRepository configRepository, IServerCrudService serverCrud, ITableRendererService tableRenderer, IHostSelectorService hostSelector, IConsoleHelperService consoleHelper, IDockerService dockerService, IMenuFactory menuFactory, INavigationService nav) : IServerMenuService
 {
-    private readonly IConfigRepository _configRepository;
-    private readonly IServerCrudService _serverCrud;
-    private readonly ITableRendererService _tableRenderer;
-    private readonly IHostSelectorService _hostSelector;
-    private readonly IConsoleHelperService _consoleHelper;
-    private readonly IDockerService _dockerService;
-    private readonly IKeyboardShortcutService _keyboardShortcut;
-    private readonly INavigationService _nav;
-    private readonly ILogger<ServerMenuService> _logger;
-
-    public ServerMenuService(
-        IConfigRepository configRepository,
-        IServerCrudService serverCrud,
-        ITableRendererService tableRenderer,
-        IHostSelectorService hostSelector,
-        IConsoleHelperService consoleHelper,
-        IDockerService dockerService,
-        IKeyboardShortcutService keyboardShortcut,
-        INavigationService nav,
-        ILogger<ServerMenuService> logger)
-    {
-        _configRepository = configRepository;
-        _serverCrud = serverCrud;
-        _tableRenderer = tableRenderer;
-        _hostSelector = hostSelector;
-        _consoleHelper = consoleHelper;
-        _dockerService = dockerService;
-        _keyboardShortcut = keyboardShortcut;
-        _nav = nav;
-        _logger = logger;
-    }
 
     public async Task SelectServer()
     {
-        var config = _configRepository.Load();
+        var config = configRepository.Load();
         if (config.Hosts.Count == 0)
         {
             AnsiConsole.MarkupLine("[red]No servers configured.[/]");
-            _consoleHelper.WaitForKey();
+            consoleHelper.WaitForKey();
             return;
         }
 
-        _nav.Push(ViewType.ServerDetail);
+        nav.Push(ViewType.ServerDetail);
 
-        while (_nav.Current == ViewType.ServerDetail)
+        while (nav.Current == ViewType.ServerDetail)
         {
-            config = _configRepository.Load();
+            config = configRepository.Load();
             AnsiConsole.Clear();
-            _tableRenderer.RenderServerTable(config);
+            tableRenderer.RenderServerTable(config);
 
-            var host = _hostSelector.SelectHost(config.Hosts, "Select a [green]server[/]");
+            var host = hostSelector.SelectHost(config.Hosts, "Select a [green]server[/]");
             if (host is null)
             {
-                _nav.Pop();
+                nav.Pop();
                 return;
             }
 
@@ -70,54 +39,50 @@ public sealed class ServerMenuService : IServerMenuService
 
     public async Task ShowServerActions(AppConfig config, ServerHost host)
     {
-        _nav.Push(ViewType.ServerDetail);
+        nav.Push(ViewType.ServerDetail);
+        bool shouldExit = false;
 
-        while (_nav.Current == ViewType.ServerDetail)
+        while (nav.Current == ViewType.ServerDetail && !shouldExit)
         {
             AnsiConsole.Clear();
             RenderServerHeader(host);
             RenderDockerSummary(host);
 
-            var choice = _keyboardShortcut.ShowMenu(
-                "[bold yellow]Server Actions[/]",
-                [
-                    new MenuEntry("Connect", 'C'),
-                    new MenuEntry("Scan Docker", 'D'),
-                    new MenuEntry("Edit", 'E'),
-                    new MenuEntry("Delete", 'L'),
-                    new MenuEntry("Back", 'B')
-                ]);
-
-            switch (choice?.Label)
+            var menuEntries = new List<MenuEntry>
             {
-                case "Connect":
-                    await _consoleHelper.RunSsh(host);
-                    break;
-                case "Scan Docker":
-                    await ScanDockerForHost(host);
-                    break;
-                case "Edit":
-                    _serverCrud.Edit(host);
+                new("Connect", 'C', executeAsync: () => consoleHelper.RunSsh(host)),
+                new("Scan Docker", 'D', executeAsync: () => ScanDockerForHost(host)),
+                new("Edit", 'E', executeAsync: () =>
+                {
+                    serverCrud.Edit(host);
                     AnsiConsole.MarkupLine($"[green]\u2713[/] Server '[cyan]{Markup.Escape(host.Alias)}[/]' updated.");
-                    _consoleHelper.WaitForKey();
-                    break;
-                case "Delete":
-                    if (_serverCrud.Delete(host))
+                    consoleHelper.WaitForKey();
+                    return Task.CompletedTask;
+                }),
+                new("Delete", 'L', executeAsync: () =>
+                {
+                    if (serverCrud.Delete(host))
                     {
                         AnsiConsole.MarkupLine($"[green]\u2713[/] Server '[cyan]{Markup.Escape(host.Alias)}[/]' deleted.");
-                        _consoleHelper.WaitForKey();
-                        _nav.Pop();
-                        return;
+                        consoleHelper.WaitForKey();
+                        shouldExit = true;
                     }
                     else
                     {
                         AnsiConsole.MarkupLine("[grey]Deletion cancelled.[/]");
-                        _consoleHelper.WaitForKey();
+                        consoleHelper.WaitForKey();
                     }
-                    break;
-                case "Back":
-                    _nav.Pop();
-                    return;
+                    return Task.CompletedTask;
+                }),
+                new("Back", 'B', actionType: MenuActionType.Back)
+            };
+
+            var shouldContinue = await menuFactory.RunMenu("[bold yellow]Server Actions[/]", menuEntries);
+
+            if (!shouldContinue || shouldExit)
+            {
+                nav.Pop();
+                return;
             }
         }
     }
@@ -214,7 +179,7 @@ public sealed class ServerMenuService : IServerMenuService
         {
             AnsiConsole.MarkupLine("[yellow]Docker scan is not supported for password-authenticated hosts.[/]");
             AnsiConsole.MarkupLine("[grey]Use SSH key or agent authentication to enable Docker scanning.[/]");
-            _consoleHelper.WaitForKey();
+            consoleHelper.WaitForKey();
             return;
         }
 
@@ -232,7 +197,7 @@ public sealed class ServerMenuService : IServerMenuService
         AnsiConsole.MarkupLine("[yellow]Scanning host for Docker containers...[/]");
         AnsiConsole.MarkupLine("[grey]This may take a few seconds.[/]");
 
-        var info = await _dockerService.Scan(host);
+        var info = await dockerService.Scan(host);
 
         if (!info.DockerAvailable)
         {
@@ -243,6 +208,8 @@ public sealed class ServerMenuService : IServerMenuService
             AnsiConsole.MarkupLine($"[green]\u2713[/] Scan complete: {info.Containers.Count} container(s), {info.ComposeStacks.Count} compose stack(s) found.");
         }
 
-        _consoleHelper.WaitForKey();
+        consoleHelper.WaitForKey();
     }
 }
+
+

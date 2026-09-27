@@ -4,17 +4,8 @@ using Sshocked.Models;
 
 namespace Sshocked.Services;
 
-public sealed class ConsoleHelperService : IConsoleHelperService
+public sealed class ConsoleHelperService(IProcessService processService, IDockerService dockerService) : IConsoleHelperService
 {
-    private readonly IProcessService _processService;
-    private readonly IDockerService _dockerService;
-
-    public ConsoleHelperService(IProcessService processService, IDockerService dockerService)
-    {
-        _processService = processService;
-        _dockerService = dockerService;
-    }
-
     public void WaitForKey()
     {
         AnsiConsole.MarkupLine("Press any key to continue...");
@@ -26,7 +17,7 @@ public sealed class ConsoleHelperService : IConsoleHelperService
         AnsiConsole.Console.Profile.Capabilities.Interactive = false;
         System.Console.ResetColor();
 
-        await _processService.RunSsh(host);
+        await processService.RunSsh(host);
 
         System.Console.ResetColor();
         AnsiConsole.Console.Profile.Capabilities.Interactive = true;
@@ -37,7 +28,7 @@ public sealed class ConsoleHelperService : IConsoleHelperService
         AnsiConsole.Console.Profile.Capabilities.Interactive = false;
         System.Console.ResetColor();
 
-        await _dockerService.Exec(host, container);
+        await dockerService.Exec(host, container);
 
         System.Console.ResetColor();
         AnsiConsole.Console.Profile.Capabilities.Interactive = true;
@@ -48,7 +39,7 @@ public sealed class ConsoleHelperService : IConsoleHelperService
         AnsiConsole.Console.Profile.Capabilities.Interactive = false;
         System.Console.ResetColor();
 
-        await _dockerService.Logs(host, container);
+        await dockerService.Logs(host, container);
 
         System.Console.ResetColor();
         AnsiConsole.Console.Profile.Capabilities.Interactive = true;

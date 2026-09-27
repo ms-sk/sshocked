@@ -2,17 +2,8 @@ using Microsoft.Extensions.Logging;
 
 namespace Sshocked.Logging;
 
-public sealed class FileLogger : ILogger
+public sealed class FileLogger(string categoryName, FileLoggerProcessor processor) : ILogger
 {
-    private readonly string _categoryName;
-    private readonly FileLoggerProcessor _processor;
-
-    public FileLogger(string categoryName, FileLoggerProcessor processor)
-    {
-        _categoryName = categoryName;
-        _processor = processor;
-    }
-
     public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
     public bool IsEnabled(LogLevel logLevel) => logLevel != LogLevel.None;
@@ -33,11 +24,11 @@ public sealed class FileLogger : ILogger
             message = $"{message}{Environment.NewLine}{exception}";
         }
 
-        _processor.Enqueue(new LogEntry
+        processor.Enqueue(new LogEntry
         {
             Timestamp = DateTimeOffset.UtcNow,
             LogLevel = logLevel,
-            CategoryName = _categoryName,
+            CategoryName = categoryName,
             Message = message
         });
     }

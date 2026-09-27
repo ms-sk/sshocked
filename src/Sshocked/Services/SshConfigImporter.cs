@@ -4,15 +4,8 @@ using Sshocked.Models;
 
 namespace Sshocked.Services;
 
-public sealed class SshConfigImporter : ISshConfigImporter
+public sealed class SshConfigImporter(ILogger<SshConfigImporter> logger) : ISshConfigImporter
 {
-    private readonly ILogger<SshConfigImporter> _logger;
-
-    public SshConfigImporter(ILogger<SshConfigImporter> logger)
-    {
-        _logger = logger;
-    }
-
     public List<ServerHost> Import()
     {
         var sshConfigPath = Path.Combine(
@@ -21,11 +14,11 @@ public sealed class SshConfigImporter : ISshConfigImporter
 
         if (!File.Exists(sshConfigPath))
         {
-            _logger.LogInformation("No SSH config found at {Path}", sshConfigPath);
+            logger.LogInformation("No SSH config found at {Path}", sshConfigPath);
             return [];
         }
 
-        _logger.LogInformation("Importing SSH config from {Path}", sshConfigPath);
+        logger.LogInformation("Importing SSH config from {Path}", sshConfigPath);
 
         var hosts = new List<ServerHost>();
         var lines = File.ReadAllLines(sshConfigPath);
@@ -83,7 +76,7 @@ public sealed class SshConfigImporter : ISshConfigImporter
             hosts.Add(CreateHost(currentAlias, currentHostName, currentUser, currentPort));
         }
 
-        _logger.LogInformation("Imported {Count} host(s) from SSH config", hosts.Count);
+        logger.LogInformation("Imported {Count} host(s) from SSH config", hosts.Count);
         return hosts;
     }
 

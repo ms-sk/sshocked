@@ -5,32 +5,18 @@ using Sshocked.Models;
 
 namespace Sshocked.Services;
 
-public sealed class DockerService : IDockerService
+public sealed class DockerService(IProcessService processService, IConfigRepository configRepository, ILogger<DockerService> logger) : IDockerService
 {
-    private readonly IProcessService _processService;
-    private readonly IConfigRepository _configRepository;
-    private readonly ILogger<DockerService> _logger;
-
-    public DockerService(
-        IProcessService processService,
-        IConfigRepository configRepository,
-        ILogger<DockerService> logger)
-    {
-        _processService = processService;
-        _configRepository = configRepository;
-        _logger = logger;
-    }
-
     public async Task<DockerHostInfo> Scan(ServerHost host)
     {
-        _logger.LogInformation("Scanning host {Alias} for Docker containers", host.Alias);
+        logger.LogInformation("Scanning host {Alias} for Docker containers", host.Alias);
 
         var info = new DockerHostInfo();
 
         // Password auth doesn't support non-interactive remote commands
         if (host.AuthType == AuthType.Password)
         {
-            _logger.LogInformation("Skipping Docker scan for {Alias}: password auth not supported for non-interactive commands", host.Alias);
+            logger.LogInformation("Skipping Docker scan for {Alias}: password auth not supported for non-interactive commands", host.Alias);
             info.DockerAvailable = false;
             info.LastScannedAt = DateTime.UtcNow;
             CacheAndSave(host, info);
@@ -39,13 +25,12 @@ public sealed class DockerService : IDockerService
 
         var sudo = BuildSudoPrefix(host.SudoPassword);
 
-        // Step 1: Check if Docker is available
-        var dockerInfoOutput = await _processService.RunSshCommand(host, $"{sudo}docker info --format '{{{{json .}}}}' 2>/dev/null || echo 'DOCKER_NOT_AVAILABLE'");
+        var dockerInfoOutput = await processService.RunSshCommand(host, $"{sudo}docker info --format '{{{{json .}}}}' 2>/dev/null || echo 'DOCKER_NOT_AVAILABLE'");
         dockerInfoOutput = dockerInfoOutput.Trim();
 
         if (dockerInfoOutput == "DOCKER_NOT_AVAILABLE" || string.IsNullOrEmpty(dockerInfoOutput))
         {
-            _logger.LogInformation("Docker is not available on host {Alias}", host.Alias);
+            logger.LogInformation("Docker is not available on host {Alias}", host.Alias);
             info.DockerAvailable = false;
             info.LastScannedAt = DateTime.UtcNow;
             CacheAndSave(host, info);
@@ -54,7 +39,6 @@ public sealed class DockerService : IDockerService
 
         info.DockerAvailable = true;
 
-        // Parse docker info JSON
         try
         {
             using var doc = JsonDocument.Parse(dockerInfoOutput);
@@ -77,21 +61,19 @@ public sealed class DockerService : IDockerService
         }
         catch (JsonException ex)
         {
-            _logger.LogWarning(ex, "Failed to parse docker info JSON from {Alias}", host.Alias);
+            logger.LogWarning(ex, "Failed to parse docker info JSON from {Alias}", host.Alias);
         }
 
-        // Step 2: List containers
-        var containersOutput = await _processService.RunSshCommand(host, $"{sudo}docker ps -a --format '{{{{json .}}}}' 2>/dev/null");
+        var containersOutput = await processService.RunSshCommand(host, $"{sudo}docker ps -a --format '{{{{json .}}}}' 2>/dev/null");
         info.Containers = ParseContainerJson(containersOutput);
 
-        // Step 3: List Compose stacks
-        var composeOutput = await _processService.RunSshCommand(host, $"{sudo}docker compose ls --format '{{{{json .}}}}' 2>/dev/null");
+        var composeOutput = await processService.RunSshCommand(host, $"{sudo}docker compose ls --format '{{{{json .}}}}' 2>/dev/null");
         info.ComposeStacks = ParseComposeStackJson(composeOutput);
 
         info.LastScannedAt = DateTime.UtcNow;
         CacheAndSave(host, info);
 
-        _logger.LogInformation("Scan complete for {Alias}: {Count} containers, {Stacks} compose stacks",
+        logger.LogInformation("Scan complete for {Alias}: {Count} containers, {Stacks} compose stacks",
             host.Alias, info.Containers.Count, info.ComposeStacks.Count);
 
         return info;
@@ -101,14 +83,14 @@ public sealed class DockerService : IDockerService
     {
         var sudo = BuildSudoPrefix(host.SudoPassword);
         var command = $"{sudo}docker exec -it {container.Name} sh";
-        return _processService.RunSshInteractive(host, command);
+        return processService.RunSshInteractive(host, command);
     }
 
     public Task Logs(ServerHost host, ContainerModel container)
     {
         var sudo = BuildSudoPrefix(host.SudoPassword);
         var command = $"{sudo}docker logs -f {container.Name}";
-        return _processService.RunSshInteractive(host, command);
+        return processService.RunSshInteractive(host, command);
     }
 
     private List<ContainerModel> ParseContainerJson(string raw)
@@ -148,7 +130,7 @@ public sealed class DockerService : IDockerService
             }
             catch (JsonException ex)
             {
-                _logger.LogWarning(ex, "Failed to parse container JSON line: {Line}", trimmed);
+                logger.LogWarning(ex, "Failed to parse container JSON line: {Line}", trimmed);
             }
         }
 
@@ -186,7 +168,7 @@ public sealed class DockerService : IDockerService
             }
             catch (JsonException ex)
             {
-                _logger.LogWarning(ex, "Failed to parse compose stack JSON line: {Line}", trimmed);
+                logger.LogWarning(ex, "Failed to parse compose stack JSON line: {Line}", trimmed);
             }
         }
 
@@ -195,13 +177,13 @@ public sealed class DockerService : IDockerService
 
     private void CacheAndSave(ServerHost host, DockerHostInfo info)
     {
-        var config = _configRepository.Load();
+        var config = configRepository.Load();
 
         var existing = config.Hosts.FirstOrDefault(h => h.Id == host.Id);
         if (existing is not null)
         {
             existing.DockerInfo = info;
-            _configRepository.Save(config);
+            configRepository.Save(config);
         }
     }
 

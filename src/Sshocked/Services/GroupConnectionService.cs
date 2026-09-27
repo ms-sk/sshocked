@@ -6,28 +6,14 @@ using Sshocked.Models;
 
 namespace Sshocked.Services;
 
-public sealed class GroupConnectionService : IGroupConnectionService
+public sealed class GroupConnectionService(IConsoleHelperService consoleHelper, ILogger<GroupConnectionService> logger) : IGroupConnectionService
 {
-    private readonly IConsoleHelperService _consoleHelper;
-    private readonly ILogger<GroupConnectionService> _logger;
-
-    public GroupConnectionService(
-        IConsoleHelperService consoleHelper,
-        ILogger<GroupConnectionService> logger)
-    {
-        _consoleHelper = consoleHelper;
-        _logger = logger;
-    }
-
-    public bool CanLaunchMultiTab =>
-        OperatingSystem.IsWindows() || OperatingSystem.IsLinux() || OperatingSystem.IsMacOS();
-
     public async Task ConnectAllSequential(List<ServerHost> hosts)
     {
         foreach (var host in hosts)
         {
             AnsiConsole.MarkupLine($"Connecting to [cyan]{Markup.Escape(host.Alias)}[/]...");
-            await _consoleHelper.RunSsh(host);
+            await consoleHelper.RunSsh(host);
         }
     }
 
@@ -55,7 +41,7 @@ public sealed class GroupConnectionService : IGroupConnectionService
         foreach (var host in hosts)
         {
             var args = ProcessService.BuildSshArgs(host);
-            _logger.LogInformation(
+                    logger.LogInformation(
                 "Launching new Windows Terminal tab for {Alias}: ssh {Args}",
                 host.Alias, args);
 
@@ -80,7 +66,7 @@ public sealed class GroupConnectionService : IGroupConnectionService
         foreach (var host in hosts)
         {
             var args = ProcessService.BuildSshArgs(host);
-            _logger.LogInformation(
+                    logger.LogInformation(
                 "Launching new terminal for {Alias}: {Cmd} ssh {Args}",
                 host.Alias, terminalCmd, args);
 
@@ -107,7 +93,7 @@ public sealed class GroupConnectionService : IGroupConnectionService
         foreach (var host in hosts)
         {
             var args = ProcessService.BuildSshArgs(host);
-            _logger.LogInformation(
+                    logger.LogInformation(
                 "Launching new Terminal.app window for {Alias}: ssh {Args}",
                 host.Alias, args);
 
