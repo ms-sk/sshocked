@@ -16,6 +16,7 @@ public sealed class MainMenuService : IMainMenuService
     private readonly IHostSelectorService _hostSelector;
     private readonly IConsoleHelperService _consoleHelper;
     private readonly IKeyboardShortcutService _keyboardShortcut;
+    private readonly IGroupConnectionService _groupConnection;
     private readonly ILogger<MainMenuService> _logger;
 
     public MainMenuService(
@@ -28,6 +29,7 @@ public sealed class MainMenuService : IMainMenuService
         IHostSelectorService hostSelector,
         IConsoleHelperService consoleHelper,
         IKeyboardShortcutService keyboardShortcut,
+        IGroupConnectionService groupConnection,
         ILogger<MainMenuService> logger)
     {
         _configRepository = configRepository;
@@ -39,6 +41,7 @@ public sealed class MainMenuService : IMainMenuService
         _hostSelector = hostSelector;
         _consoleHelper = consoleHelper;
         _keyboardShortcut = keyboardShortcut;
+        _groupConnection = groupConnection;
         _logger = logger;
     }
 
@@ -62,8 +65,9 @@ public sealed class MainMenuService : IMainMenuService
                 "[bold yellow]Main Menu[/]",
                 [
                     new MenuEntry("Connect", 'C'),
+                    new MenuEntry("Connect Group", 'G'),
                     new MenuEntry("Servers", 'S'),
-                    new MenuEntry("Groups", 'G'),
+                    new MenuEntry("Groups", 'R'),
                     new MenuEntry("Exit", 'E')
                 ]);
 
@@ -71,6 +75,9 @@ public sealed class MainMenuService : IMainMenuService
             {
                 case "Connect":
                     await ConnectToServer(config);
+                    break;
+                case "Connect Group":
+                    await ConnectToGroup(config);
                     break;
                 case "Servers":
                     await ShowServersMenu(config);
@@ -165,6 +172,67 @@ public sealed class MainMenuService : IMainMenuService
                     break;
             }
         }
+    }
+
+    private async Task ConnectToGroup(AppConfig config)
+    {
+        var groups = _groupManagement.GetAll();
+        if (groups.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[red]No groups configured. Create one first.[/]");
+            _consoleHelper.WaitForKey();
+            return;
+        }
+
+        var groupNames = groups.Select(g => g.Name).ToList();
+        groupNames.Add(MenuLabels.Back);
+
+        var selectedName = AnsiConsole.Prompt(
+            new SelectionPrompt<string>()
+                .Title("Select a [green]group[/] to connect ([grey]clear search for Back[/]):")
+                .PageSize(10)
+                .EnableSearch()
+                .AddChoices(groupNames));
+
+        if (selectedName == MenuLabels.Back)
+        {
+            return;
+        }
+
+        var group = groups.First(g => g.Name == selectedName);
+        var hosts = config.Hosts.Where(h => h.GroupId == group.Id).ToList();
+
+        if (hosts.Count == 0)
+        {
+            AnsiConsole.MarkupLine($"[red]No servers in group '[cyan]{Markup.Escape(group.Name)}[/]'.[/]");
+            _consoleHelper.WaitForKey();
+            return;
+        }
+
+        if (_groupConnection.CanLaunchMultiTab)
+        {
+            var choice = _keyboardShortcut.ShowMenu(
+                $"[bold yellow]Connect group: {Markup.Escape(group.Name)}[/]",
+                [
+                    new MenuEntry("Sequential (one after another)", 'S', ConnectionStrategy.Sequential),
+                    new MenuEntry("Multi-Tab (new terminal windows)", 'M', ConnectionStrategy.MultiTab),
+                    new MenuEntry("Back", 'B')
+                ]);
+
+            switch (choice?.Tag)
+            {
+                case ConnectionStrategy.Sequential:
+                    await _groupConnection.ConnectAllSequential(hosts);
+                    break;
+                case ConnectionStrategy.MultiTab:
+                    await _groupConnection.ConnectAllMultiTab(hosts);
+                    break;
+            }
+
+            return;
+        }
+
+        await _groupConnection.ConnectAllSequential(hosts);
     }
 
     private async Task ConnectToServer(AppConfig config)

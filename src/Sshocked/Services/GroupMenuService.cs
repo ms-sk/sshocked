@@ -15,6 +15,7 @@ public sealed class GroupMenuService : IGroupMenuService
     private readonly IConsoleHelperService _consoleHelper;
     private readonly IKeyboardShortcutService _keyboardShortcut;
     private readonly INavigationService _nav;
+    private readonly IGroupConnectionService _groupConnection;
     private readonly ILogger<GroupMenuService> _logger;
 
     public GroupMenuService(
@@ -26,6 +27,7 @@ public sealed class GroupMenuService : IGroupMenuService
         IConsoleHelperService consoleHelper,
         IKeyboardShortcutService keyboardShortcut,
         INavigationService nav,
+        IGroupConnectionService groupConnection,
         ILogger<GroupMenuService> logger)
     {
         _configRepository = configRepository;
@@ -36,6 +38,7 @@ public sealed class GroupMenuService : IGroupMenuService
         _consoleHelper = consoleHelper;
         _keyboardShortcut = keyboardShortcut;
         _nav = nav;
+        _groupConnection = groupConnection;
         _logger = logger;
     }
 
@@ -151,10 +154,29 @@ public sealed class GroupMenuService : IGroupMenuService
 
     private async Task ConnectAll(List<ServerHost> hosts)
     {
-        foreach (var host in hosts)
+        if (_groupConnection.CanLaunchMultiTab)
         {
-            AnsiConsole.MarkupLine($"Connecting to [cyan]{Markup.Escape(host.Alias)}[/]...");
-            await _consoleHelper.RunSsh(host);
+            var choice = _keyboardShortcut.ShowMenu(
+                "[bold yellow]Connect all — Strategy[/]",
+                [
+                    new MenuEntry("Sequential (one after another)", 'S', ConnectionStrategy.Sequential),
+                    new MenuEntry("Multi-Tab (new terminal windows)", 'M', ConnectionStrategy.MultiTab),
+                    new MenuEntry("Back", 'B')
+                ]);
+
+            switch (choice?.Tag)
+            {
+                case ConnectionStrategy.Sequential:
+                    await _groupConnection.ConnectAllSequential(hosts);
+                    break;
+                case ConnectionStrategy.MultiTab:
+                    await _groupConnection.ConnectAllMultiTab(hosts);
+                    break;
+            }
+
+            return;
         }
+
+        await _groupConnection.ConnectAllSequential(hosts);
     }
 }

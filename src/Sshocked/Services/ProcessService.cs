@@ -99,7 +99,7 @@ public sealed class ProcessService : IProcessService
         }
     }
 
-    private static string BuildSshArgs(ServerHost host)
+    internal static string BuildSshArgs(ServerHost host)
     {
         var sb = new StringBuilder();
 
