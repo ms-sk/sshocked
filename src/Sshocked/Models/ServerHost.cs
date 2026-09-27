@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Sshocked.Models;
 
 public sealed class ServerHost
@@ -12,4 +14,18 @@ public sealed class ServerHost
     public AuthType AuthType { get; set; } = AuthType.SshKey;
     public string? IdentityFile { get; set; }
     public string? CustomSshOptions { get; set; }
+    public DockerHostInfo? DockerInfo { get; set; }
+
+    /// <summary>
+    /// Optional sudo password, set at runtime only — never serialized to config.
+    /// </summary>
+    [JsonIgnore]
+    public string? SudoPassword { get; set; }
+
+    /// <summary>
+    /// Optional SSH password, set at runtime only — never serialized to config.
+    /// Used for non-interactive commands (e.g. Docker scan) with password auth.
+    /// </summary>
+    [JsonIgnore]
+    public string? SshPassword { get; set; }
 }

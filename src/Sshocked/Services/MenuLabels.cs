@@ -15,4 +15,5 @@ public static class MenuLabels
     public const string ShowGroups = "[[S]] Show groups";
     public const string SelectServer = "[[S]] Select server...";
     public const string ConnectAll = "[[C]] Connect all";
+    public const string ScanDocker = "[[D]] Scan Docker";
 }

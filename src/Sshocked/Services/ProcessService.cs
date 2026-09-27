@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Sshocked.Interfaces;
@@ -14,15 +15,15 @@ public sealed class ProcessService : IProcessService
         _logger = logger;
     }
 
-    public async Task RunSshAsync(ServerHost host)
+    public async Task RunSsh(ServerHost host)
     {
         var args = BuildSshArgs(host);
 
         _logger.LogInformation("Connecting to {Alias} via ssh {Args}", host.Alias, args);
 
-        var process = new System.Diagnostics.Process
+        var process = new Process
         {
-            StartInfo = new System.Diagnostics.ProcessStartInfo
+            StartInfo = new ProcessStartInfo
             {
                 FileName = "ssh",
                 Arguments = args,
@@ -43,7 +44,62 @@ public sealed class ProcessService : IProcessService
         }
     }
 
-    private static string BuildSshArgs(ServerHost host)
+    public async Task<string> RunSshCommand(ServerHost host, string command)
+    {
+        _logger.LogInformation("Running remote command on {Alias}: {Command}", host.Alias, command);
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = "ssh",
+            Arguments = $"{BuildSshArgs(host)} -- {command}",
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+
+        var process = new Process { StartInfo = psi };
+        process.Start();
+
+        var output = await process.StandardOutput.ReadToEndAsync();
+        var error = await process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+
+        if (process.ExitCode != 0)
+        {
+            _logger.LogWarning("Remote command on {Alias} exited with code {ExitCode}: {Error}",
+                host.Alias, process.ExitCode, error);
+        }
+
+        return output;
+    }
+
+    public async Task RunSshInteractive(ServerHost host, string command)
+    {
+        var sshArgs = BuildSshArgs(host);
+
+        _logger.LogInformation("Running interactive remote command on {Alias}: {Command}", host.Alias, command);
+
+        var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = "ssh",
+                Arguments = $"{sshArgs} -t -- {command}",
+                UseShellExecute = false
+            }
+        };
+
+        process.Start();
+        await process.WaitForExitAsync();
+
+        if (process.ExitCode != 0)
+        {
+            _logger.LogWarning("Interactive remote command on {Alias} exited with code {ExitCode}", host.Alias, process.ExitCode);
+        }
+    }
+
+    internal static string BuildSshArgs(ServerHost host)
     {
         var sb = new StringBuilder();
 

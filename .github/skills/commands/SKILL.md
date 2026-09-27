@@ -1,3 +1,8 @@
+---
+name: commands
+description: Command reference, naming conventions, and how to add new commands. Use when adding a new command or service.
+---
+
 # Commands
 
 Each command is implemented as a dedicated service interface + class.
@@ -14,6 +19,12 @@ Each command is implemented as a dedicated service interface + class.
 | Console I/O | `IConsoleWriterService` | Abstraction over `System.Console` for testability |
 | Argument Parser | `IArgumentParserService` | Parse CLI arguments before TUI initialization |
 | CLI Dispatcher | `ICliDispatcherService` | Handle direct connect, --list, --help, --version |
+| Docker Service | `IDockerService` | Scan remote hosts for Docker containers, exec into containers, tail logs |
+
+## Naming Convention
+
+- Methods that return `Task` or `Task<T>` do **not** carry an `Async` suffix. The return type already signals asynchrony.
+- Example: `Task Scan(ServerHost host)` not `Task ScanAsync(ServerHost host)`.
 
 ## Adding a New Command
 

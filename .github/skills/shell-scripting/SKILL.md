@@ -1,3 +1,8 @@
+---
+name: shell-scripting
+description: Standards for shell script structure, conciseness, error handling, and acceptance criteria. Use when writing or reviewing shell scripts.
+---
+
 # Shell Scripting Standards
 
 ## Code Minimization & Dead Code Removal

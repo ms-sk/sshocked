@@ -20,7 +20,7 @@ public sealed class CliDispatcherService : ICliDispatcherService
         _logger = logger;
     }
 
-    public async Task<bool> DispatchAsync(ParseResult parseResult)
+    public async Task<bool> Dispatch(ParseResult parseResult)
     {
         if (parseResult.ShowHelp)
         {
@@ -42,13 +42,13 @@ public sealed class CliDispatcherService : ICliDispatcherService
 
         if (parseResult.HasPositionalArg && parseResult.PositionalArg is not null)
         {
-            return await ConnectToTargetAsync(parseResult.PositionalArg);
+            return await ConnectToTarget(parseResult.PositionalArg);
         }
 
         return false;
     }
 
-    private async Task<bool> ConnectToTargetAsync(string target)
+    private async Task<bool> ConnectToTarget(string target)
     {
         var config = _configRepository.Load();
 
@@ -59,7 +59,7 @@ public sealed class CliDispatcherService : ICliDispatcherService
         if (host is not null)
         {
             _logger.LogInformation("Direct connect to server '{Alias}'", host.Alias);
-            await _sshRunner.ConnectAsync(host);
+            await _sshRunner.Connect(host);
             return true;
         }
 
@@ -70,7 +70,7 @@ public sealed class CliDispatcherService : ICliDispatcherService
         if (host is not null)
         {
             _logger.LogInformation("Direct connect to hostname '{HostName}'", host.HostName);
-            await _sshRunner.ConnectAsync(host);
+            await _sshRunner.Connect(host);
             return true;
         }
 
@@ -92,7 +92,7 @@ public sealed class CliDispatcherService : ICliDispatcherService
             foreach (var groupHost in groupHosts)
             {
                 Console.WriteLine($"Connecting to {groupHost.Alias} ({groupHost.HostName})...");
-                await _sshRunner.ConnectAsync(groupHost);
+                await _sshRunner.Connect(groupHost);
             }
 
             return true;

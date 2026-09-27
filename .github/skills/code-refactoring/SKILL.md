@@ -1,3 +1,8 @@
+---
+name: code-refactoring
+description: Cleanup standards, type design, modularization, and acceptance criteria. Use when refactoring or cleaning up C# code.
+---
+
 # Code Refactoring & Cleanup Standards
 
 ## Code Minimization & Dead Code Removal
@@ -24,6 +29,12 @@
 - Strip out all code comments unless they document non-obvious domain complexities or critical constraints.
 - If you see magic strings, create a static class for them.
 
+## Async Naming Convention
+
+- Methods that return `Task` or `Task<T>` **must not** have an `Async` suffix.
+- The `Async` suffix is reserved for methods that are truly asynchronous (i.e., contain `await`). Methods that only return a `Task` without `await` still get no suffix.
+- This applies to both interface declarations and implementations.
+
 ## Code Formatting
 
 - Run a full, clean code auto-format across all modified files prior to completion.
@@ -35,3 +46,4 @@
 - No `partial` keyword exists on non-generated classes; all uninherited classes carry the `sealed` modifier.
 - No German terms or non-essential comments exist in code or metadata.
 - Solution builds cleanly with no warnings regarding unused symbols.
+- No `Async` suffix on any `Task`-returning method.

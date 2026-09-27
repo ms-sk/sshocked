@@ -2,5 +2,5 @@ namespace Sshocked.Interfaces;
 
 public interface IAppRunner
 {
-    Task RunAsync();
+    Task Run();
 }

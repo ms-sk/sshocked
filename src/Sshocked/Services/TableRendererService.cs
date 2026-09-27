@@ -45,23 +45,21 @@ public sealed class TableRendererService : ITableRendererService
             .Border(TableBorder.Rounded)
             .Title($"[cyan]{groupName}[/]")
             .AddColumns([
-                new TableColumn("Alias").Centered(),
-                new TableColumn("Host").Centered(),
-                new TableColumn("User").Centered(),
-                new TableColumn("Port").Centered(),
-                new TableColumn("Auth").Centered()
+                new TableColumn("Alias"),
+                new TableColumn("Host"),
+                new TableColumn("User"),
+                new TableColumn("Port"),
+                new TableColumn("Auth")
             ]);
 
         foreach (var host in hosts)
         {
-            var authLabel = GetAuthLabel(host.AuthType);
-
             table.AddRow(
                 new Markup($"[bold]{Markup.Escape(host.Alias)}[/]"),
                 new Text(host.HostName),
                 new Text(host.User),
                 new Text(host.Port.ToString()),
-                new Text(authLabel));
+                new Text(GetAuthLabel(host.AuthType)));
         }
 
         AnsiConsole.Write(table);

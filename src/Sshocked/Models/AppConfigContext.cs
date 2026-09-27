@@ -6,6 +6,9 @@ namespace Sshocked.Models;
 [JsonSerializable(typeof(ServerGroup))]
 [JsonSerializable(typeof(ServerHost))]
 [JsonSerializable(typeof(AuthType))]
+[JsonSerializable(typeof(DockerHostInfo))]
+[JsonSerializable(typeof(ContainerModel))]
+[JsonSerializable(typeof(ComposeStackModel))]
 [JsonSourceGenerationOptions(
     WriteIndented = true,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]

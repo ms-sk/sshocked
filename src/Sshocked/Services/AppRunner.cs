@@ -26,7 +26,7 @@ public sealed class AppRunner : IAppRunner
         _logger = logger;
     }
 
-    public async Task RunAsync()
+    public async Task Run()
     {
         _logger.LogInformation("AppRunner starting");
 
@@ -64,7 +64,7 @@ public sealed class AppRunner : IAppRunner
             _configRepository.Save(config);
         }
 
-        await _mainMenu.ShowAsync();
+        await _mainMenu.Show();
 
         _logger.LogInformation("AppRunner finished");
     }

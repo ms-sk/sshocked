@@ -15,6 +15,8 @@ public sealed class MainMenuService : IMainMenuService
     private readonly ITableRendererService _tableRenderer;
     private readonly IHostSelectorService _hostSelector;
     private readonly IConsoleHelperService _consoleHelper;
+    private readonly IKeyboardShortcutService _keyboardShortcut;
+    private readonly IGroupConnectionService _groupConnection;
     private readonly ILogger<MainMenuService> _logger;
 
     public MainMenuService(
@@ -26,6 +28,8 @@ public sealed class MainMenuService : IMainMenuService
         ITableRendererService tableRenderer,
         IHostSelectorService hostSelector,
         IConsoleHelperService consoleHelper,
+        IKeyboardShortcutService keyboardShortcut,
+        IGroupConnectionService groupConnection,
         ILogger<MainMenuService> logger)
     {
         _configRepository = configRepository;
@@ -36,15 +40,17 @@ public sealed class MainMenuService : IMainMenuService
         _tableRenderer = tableRenderer;
         _hostSelector = hostSelector;
         _consoleHelper = consoleHelper;
+        _keyboardShortcut = keyboardShortcut;
+        _groupConnection = groupConnection;
         _logger = logger;
     }
 
-    public Task ShowAsync()
+    public async Task Show()
     {
         if (!AnsiConsole.Profile.Capabilities.Interactive)
         {
             _logger.LogWarning("Terminal is not interactive -- skipping main menu");
-            return Task.CompletedTask;
+            return;
         }
 
         var running = true;
@@ -55,38 +61,38 @@ public sealed class MainMenuService : IMainMenuService
             AnsiConsole.Clear();
             _tableRenderer.RenderServerTable(config);
 
-            var choice = AnsiConsole.Prompt(
-                new SelectionPrompt<string>()
-                    .Title("[bold yellow]Main Menu[/]")
-                    .PageSize(10)
-                    .AddChoices([
-                        MenuLabels.Connect,
-                        MenuLabels.Servers,
-                        MenuLabels.Groups,
-                        MenuLabels.Exit
-                    ]));
+            var choice = _keyboardShortcut.ShowMenu(
+                "[bold yellow]Main Menu[/]",
+                [
+                    new MenuEntry("Connect", 'C'),
+                    new MenuEntry("Connect Group", 'G'),
+                    new MenuEntry("Servers", 'S'),
+                    new MenuEntry("Groups", 'R'),
+                    new MenuEntry("Exit", 'E')
+                ]);
 
-            switch (choice)
+            switch (choice?.Label)
             {
-                case var c when c == MenuLabels.Connect:
-                    ConnectToServer(config);
+                case "Connect":
+                    await ConnectToServer(config);
                     break;
-                case var c when c == MenuLabels.Servers:
-                    ShowServersMenu(config);
+                case "Connect Group":
+                    await ConnectToGroup(config);
                     break;
-                case var c when c == MenuLabels.Groups:
-                    ShowGroupsMenu(config);
+                case "Servers":
+                    await ShowServersMenu(config);
                     break;
-                case var c when c == MenuLabels.Exit:
+                case "Groups":
+                    await ShowGroupsMenu(config);
+                    break;
+                case "Exit":
                     running = false;
                     break;
             }
         }
-
-        return Task.CompletedTask;
     }
 
-    private void ShowServersMenu(AppConfig config)
+    private async Task ShowServersMenu(AppConfig config)
     {
         var running = true;
 
@@ -96,40 +102,38 @@ public sealed class MainMenuService : IMainMenuService
             AnsiConsole.Clear();
             _tableRenderer.RenderServerTable(config);
 
-            var choice = AnsiConsole.Prompt(
-                new SelectionPrompt<string>()
-                    .Title("[bold yellow]Servers[/]")
-                    .PageSize(10)
-                    .AddChoices([
-                        MenuLabels.ShowAll,
-                        MenuLabels.Add,
-                        MenuLabels.Edit,
-                        MenuLabels.Delete,
-                        MenuLabels.Back
-                    ]));
+            var choice = _keyboardShortcut.ShowMenu(
+                "[bold yellow]Servers[/]",
+                [
+                    new MenuEntry("Show all", 'S'),
+                    new MenuEntry("Add", 'A'),
+                    new MenuEntry("Edit", 'E'),
+                    new MenuEntry("Delete", 'D'),
+                    new MenuEntry("Back", 'B')
+                ]);
 
-            switch (choice)
+            switch (choice?.Label)
             {
-                case var c when c == MenuLabels.ShowAll:
-                    _serverMenu.SelectServer();
+                case "Show all":
+                    await _serverMenu.SelectServer();
                     break;
-                case var c when c == MenuLabels.Add:
+                case "Add":
                     AddServer();
                     break;
-                case var c when c == MenuLabels.Edit:
+                case "Edit":
                     EditServer(config);
                     break;
-                case var c when c == MenuLabels.Delete:
+                case "Delete":
                     DeleteServer(config);
                     break;
-                case var c when c == MenuLabels.Back:
+                case "Back":
                     running = false;
                     break;
             }
         }
     }
 
-    private void ShowGroupsMenu(AppConfig config)
+    private async Task ShowGroupsMenu(AppConfig config)
     {
         var running = true;
 
@@ -139,40 +143,99 @@ public sealed class MainMenuService : IMainMenuService
             AnsiConsole.Clear();
             _tableRenderer.RenderServerTable(config);
 
-            var choice = AnsiConsole.Prompt(
-                new SelectionPrompt<string>()
-                    .Title("[bold yellow]Groups[/]")
-                    .PageSize(10)
-                    .AddChoices([
-                        MenuLabels.ShowGroups,
-                        MenuLabels.Add,
-                        MenuLabels.Edit,
-                        MenuLabels.Delete,
-                        MenuLabels.Back
-                    ]));
+            var choice = _keyboardShortcut.ShowMenu(
+                "[bold yellow]Groups[/]",
+                [
+                    new MenuEntry("Show groups", 'S'),
+                    new MenuEntry("Add", 'A'),
+                    new MenuEntry("Edit", 'E'),
+                    new MenuEntry("Delete", 'D'),
+                    new MenuEntry("Back", 'B')
+                ]);
 
-            switch (choice)
+            switch (choice?.Label)
             {
-                case var c when c == MenuLabels.ShowGroups:
-                    _groupMenu.Browse();
+                case "Show groups":
+                    await _groupMenu.Browse();
                     break;
-                case var c when c == MenuLabels.Add:
+                case "Add":
                     CreateNewGroup(config);
                     break;
-                case var c when c == MenuLabels.Edit:
+                case "Edit":
                     RenameGroup(config);
                     break;
-                case var c when c == MenuLabels.Delete:
+                case "Delete":
                     DeleteGroup(config);
                     break;
-                case var c when c == MenuLabels.Back:
+                case "Back":
                     running = false;
                     break;
             }
         }
     }
 
-    private void ConnectToServer(AppConfig config)
+    private async Task ConnectToGroup(AppConfig config)
+    {
+        var groups = _groupManagement.GetAll();
+        if (groups.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[red]No groups configured. Create one first.[/]");
+            _consoleHelper.WaitForKey();
+            return;
+        }
+
+        var groupNames = groups.Select(g => g.Name).ToList();
+        groupNames.Add(MenuLabels.Back);
+
+        var selectedName = AnsiConsole.Prompt(
+            new SelectionPrompt<string>()
+                .Title("Select a [green]group[/] to connect ([grey]clear search for Back[/]):")
+                .PageSize(10)
+                .EnableSearch()
+                .AddChoices(groupNames));
+
+        if (selectedName == MenuLabels.Back)
+        {
+            return;
+        }
+
+        var group = groups.First(g => g.Name == selectedName);
+        var hosts = config.Hosts.Where(h => h.GroupId == group.Id).ToList();
+
+        if (hosts.Count == 0)
+        {
+            AnsiConsole.MarkupLine($"[red]No servers in group '[cyan]{Markup.Escape(group.Name)}[/]'.[/]");
+            _consoleHelper.WaitForKey();
+            return;
+        }
+
+        if (_groupConnection.CanLaunchMultiTab)
+        {
+            var choice = _keyboardShortcut.ShowMenu(
+                $"[bold yellow]Connect group: {Markup.Escape(group.Name)}[/]",
+                [
+                    new MenuEntry("Sequential (one after another)", 'S', ConnectionStrategy.Sequential),
+                    new MenuEntry("Multi-Tab (new terminal windows)", 'M', ConnectionStrategy.MultiTab),
+                    new MenuEntry("Back", 'B')
+                ]);
+
+            switch (choice?.Tag)
+            {
+                case ConnectionStrategy.Sequential:
+                    await _groupConnection.ConnectAllSequential(hosts);
+                    break;
+                case ConnectionStrategy.MultiTab:
+                    await _groupConnection.ConnectAllMultiTab(hosts);
+                    break;
+            }
+
+            return;
+        }
+
+        await _groupConnection.ConnectAllSequential(hosts);
+    }
+
+    private async Task ConnectToServer(AppConfig config)
     {
         if (config.Hosts.Count == 0)
         {
@@ -187,7 +250,56 @@ public sealed class MainMenuService : IMainMenuService
             return;
         }
 
-        _consoleHelper.RunSsh(host);
+        var containers = host.DockerInfo?.Containers;
+        if (containers is { Count: > 0 })
+        {
+            var containerEntries = containers
+                .Select(c => (Container: c, Entry: new MenuEntry($"{Markup.Escape(c.Name)}  [grey]({c.Image})[/]")))
+                .ToList();
+
+            var choices = new List<MenuEntry> { new("Connect", 'C') };
+            choices.AddRange(containerEntries.Select(ce => ce.Entry));
+            choices.Add(new MenuEntry("Back", 'B'));
+
+            var selected = _keyboardShortcut.ShowMenu(
+                $"[bold yellow]Connect to {Markup.Escape(host.Alias)}[/]",
+                choices);
+
+            if (selected?.Label == "Connect")
+            {
+                await _consoleHelper.RunSsh(host);
+            }
+            else if (selected?.Label != "Back" && selected is not null)
+            {
+                var container = containerEntries.First(ce => ce.Entry.Label == selected.Label).Container;
+                await ShowContainerActions(host, container);
+            }
+
+            return;
+        }
+
+        await _consoleHelper.RunSsh(host);
+    }
+
+    private async Task ShowContainerActions(ServerHost host, ContainerModel container)
+    {
+        var choice = _keyboardShortcut.ShowMenu(
+            $"[bold yellow]{Markup.Escape(container.Name)}[/]",
+            [
+                new MenuEntry("Exec (sh)", 'E'),
+                new MenuEntry("Logs (-f)", 'L'),
+                new MenuEntry("Back", 'B')
+            ]);
+
+        switch (choice?.Label)
+        {
+            case "Exec (sh)":
+                await _consoleHelper.RunDockerExec(host, container);
+                break;
+            case "Logs (-f)":
+                await _consoleHelper.RunDockerLogs(host, container);
+                break;
+        }
     }
 
     private void EditServer(AppConfig config)

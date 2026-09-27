@@ -4,5 +4,7 @@ namespace Sshocked.Interfaces;
 
 public interface IProcessService
 {
-    Task RunSshAsync(ServerHost host);
+    Task RunSsh(ServerHost host);
+    Task<string> RunSshCommand(ServerHost host, string command);
+    Task RunSshInteractive(ServerHost host, string command);
 }
