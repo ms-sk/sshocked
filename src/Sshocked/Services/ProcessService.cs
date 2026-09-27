@@ -58,17 +58,45 @@ public sealed class ProcessService : IProcessService
             CreateNoWindow = true
         };
 
-        var process = new Process { StartInfo = psi };
-        process.Start();
+        using var process = new Process { StartInfo = psi };
 
-        var output = await process.StandardOutput.ReadToEndAsync();
-        var error = await process.StandardError.ReadToEndAsync();
+        var outputBuilder = new StringBuilder();
+        var errorBuilder = new StringBuilder();
+
+        process.OutputDataReceived += (_, args) =>
+        {
+            if (args.Data is not null)
+            {
+                outputBuilder.AppendLine(args.Data);
+            }
+        };
+
+        process.ErrorDataReceived += (_, args) =>
+        {
+            if (args.Data is not null)
+            {
+                errorBuilder.AppendLine(args.Data);
+            }
+        };
+
+        process.Start();
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+
         await process.WaitForExitAsync();
+
+        var output = outputBuilder.ToString();
+        var error = errorBuilder.ToString();
 
         if (process.ExitCode != 0)
         {
             _logger.LogWarning("Remote command on {Alias} exited with code {ExitCode}: {Error}",
                 host.Alias, process.ExitCode, error);
+        }
+
+        if (!string.IsNullOrEmpty(error))
+        {
+            output += error;
         }
 
         return output;

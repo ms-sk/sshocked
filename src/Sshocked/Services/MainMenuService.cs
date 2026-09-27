@@ -15,8 +15,9 @@ public sealed class MainMenuService : IMainMenuService
     private readonly ITableRendererService _tableRenderer;
     private readonly IHostSelectorService _hostSelector;
     private readonly IConsoleHelperService _consoleHelper;
-    private readonly IKeyboardShortcutService _keyboardShortcut;
     private readonly IGroupConnectionService _groupConnection;
+    private readonly IProcessService _processService;
+    private readonly IMenuFactory _menuFactory;
     private readonly ILogger<MainMenuService> _logger;
 
     public MainMenuService(
@@ -28,8 +29,9 @@ public sealed class MainMenuService : IMainMenuService
         ITableRendererService tableRenderer,
         IHostSelectorService hostSelector,
         IConsoleHelperService consoleHelper,
-        IKeyboardShortcutService keyboardShortcut,
         IGroupConnectionService groupConnection,
+        IProcessService processService,
+        IMenuFactory menuFactory,
         ILogger<MainMenuService> logger)
     {
         _configRepository = configRepository;
@@ -40,8 +42,9 @@ public sealed class MainMenuService : IMainMenuService
         _tableRenderer = tableRenderer;
         _hostSelector = hostSelector;
         _consoleHelper = consoleHelper;
-        _keyboardShortcut = keyboardShortcut;
         _groupConnection = groupConnection;
+        _processService = processService;
+        _menuFactory = menuFactory;
         _logger = logger;
     }
 
@@ -61,35 +64,22 @@ public sealed class MainMenuService : IMainMenuService
             AnsiConsole.Clear();
             _tableRenderer.RenderServerTable(config);
 
-            var choice = _keyboardShortcut.ShowMenu(
-                "[bold yellow]Main Menu[/]",
-                [
-                    new MenuEntry("Connect", 'C'),
-                    new MenuEntry("Connect Group", 'G'),
-                    new MenuEntry("Servers", 'S'),
-                    new MenuEntry("Groups", 'R'),
-                    new MenuEntry("Exit", 'E')
-                ]);
-
-            switch (choice?.Label)
-            {
-                case "Connect":
-                    await ConnectToServer(config);
-                    break;
-                case "Connect Group":
-                    await ConnectToGroup(config);
-                    break;
-                case "Servers":
-                    await ShowServersMenu(config);
-                    break;
-                case "Groups":
-                    await ShowGroupsMenu(config);
-                    break;
-                case "Exit":
-                    running = false;
-                    break;
-            }
+            var menuEntries = BuildMainMenuEntries(config);
+            running = await _menuFactory.RunMenu("[bold yellow]Main Menu[/]", menuEntries);
         }
+    }
+
+    private List<MenuEntry> BuildMainMenuEntries(AppConfig config)
+    {
+        return new List<MenuEntry>
+        {
+            new("Connect", 'C', executeAsync: () => ConnectToServer(config)),
+            new("Connect Group", 'G', executeAsync: () => ConnectToGroup(config)),
+            new("Run command", 'X', executeAsync: () => RunCommandOnGroup(config)),
+            new("Servers", 'S', executeAsync: () => ShowServersMenu(config)),
+            new("Groups", 'R', executeAsync: () => ShowGroupsMenu(config)),
+            new("Exit", 'E', actionType: MenuActionType.Exit)
+        };
     }
 
     private async Task ShowServersMenu(AppConfig config)
@@ -102,34 +92,16 @@ public sealed class MainMenuService : IMainMenuService
             AnsiConsole.Clear();
             _tableRenderer.RenderServerTable(config);
 
-            var choice = _keyboardShortcut.ShowMenu(
-                "[bold yellow]Servers[/]",
-                [
-                    new MenuEntry("Show all", 'S'),
-                    new MenuEntry("Add", 'A'),
-                    new MenuEntry("Edit", 'E'),
-                    new MenuEntry("Delete", 'D'),
-                    new MenuEntry("Back", 'B')
-                ]);
-
-            switch (choice?.Label)
+            var menuEntries = new List<MenuEntry>
             {
-                case "Show all":
-                    await _serverMenu.SelectServer();
-                    break;
-                case "Add":
-                    AddServer();
-                    break;
-                case "Edit":
-                    EditServer(config);
-                    break;
-                case "Delete":
-                    DeleteServer(config);
-                    break;
-                case "Back":
-                    running = false;
-                    break;
-            }
+                new("Show all", 'S', executeAsync: () => _serverMenu.SelectServer()),
+                new("Add", 'A', executeAsync: () => { AddServer(); return Task.CompletedTask; }),
+                new("Edit", 'E', executeAsync: () => { EditServer(config); return Task.CompletedTask; }),
+                new("Delete", 'D', executeAsync: () => { DeleteServer(config); return Task.CompletedTask; }),
+                new("Back", 'B', actionType: MenuActionType.Back)
+            };
+
+            running = await _menuFactory.RunMenu("[bold yellow]Servers[/]", menuEntries);
         }
     }
 
@@ -143,34 +115,16 @@ public sealed class MainMenuService : IMainMenuService
             AnsiConsole.Clear();
             _tableRenderer.RenderServerTable(config);
 
-            var choice = _keyboardShortcut.ShowMenu(
-                "[bold yellow]Groups[/]",
-                [
-                    new MenuEntry("Show groups", 'S'),
-                    new MenuEntry("Add", 'A'),
-                    new MenuEntry("Edit", 'E'),
-                    new MenuEntry("Delete", 'D'),
-                    new MenuEntry("Back", 'B')
-                ]);
-
-            switch (choice?.Label)
+            var menuEntries = new List<MenuEntry>
             {
-                case "Show groups":
-                    await _groupMenu.Browse();
-                    break;
-                case "Add":
-                    CreateNewGroup(config);
-                    break;
-                case "Edit":
-                    RenameGroup(config);
-                    break;
-                case "Delete":
-                    DeleteGroup(config);
-                    break;
-                case "Back":
-                    running = false;
-                    break;
-            }
+                new("Show groups", 'S', executeAsync: () => _groupMenu.Browse()),
+                new("Add", 'A', executeAsync: () => { CreateNewGroup(config); return Task.CompletedTask; }),
+                new("Edit", 'E', executeAsync: () => { RenameGroup(config); return Task.CompletedTask; }),
+                new("Delete", 'D', executeAsync: () => { DeleteGroup(config); return Task.CompletedTask; }),
+                new("Back", 'B', actionType: MenuActionType.Back)
+            };
+
+            running = await _menuFactory.RunMenu("[bold yellow]Groups[/]", menuEntries);
         }
     }
 
@@ -211,28 +165,104 @@ public sealed class MainMenuService : IMainMenuService
 
         if (_groupConnection.CanLaunchMultiTab)
         {
-            var choice = _keyboardShortcut.ShowMenu(
-                $"[bold yellow]Connect group: {Markup.Escape(group.Name)}[/]",
-                [
-                    new MenuEntry("Sequential (one after another)", 'S', ConnectionStrategy.Sequential),
-                    new MenuEntry("Multi-Tab (new terminal windows)", 'M', ConnectionStrategy.MultiTab),
-                    new MenuEntry("Back", 'B')
-                ]);
-
-            switch (choice?.Tag)
+            var menuEntries = new List<MenuEntry>
             {
-                case ConnectionStrategy.Sequential:
-                    await _groupConnection.ConnectAllSequential(hosts);
-                    break;
-                case ConnectionStrategy.MultiTab:
-                    await _groupConnection.ConnectAllMultiTab(hosts);
-                    break;
-            }
+                new("Sequential (one after another)", 'S', executeAsync: () => _groupConnection.ConnectAllSequential(hosts)),
+                new("Multi-Tab (new terminal windows)", 'M', executeAsync: () => _groupConnection.ConnectAllMultiTab(hosts)),
+                new("Back", 'B', actionType: MenuActionType.Back)
+            };
 
+            await _menuFactory.RunMenu($"[bold yellow]Connect group: {Markup.Escape(group.Name)}[/]", menuEntries);
             return;
         }
 
         await _groupConnection.ConnectAllSequential(hosts);
+    }
+
+    private async Task RunCommandOnGroup(AppConfig config)
+    {
+        var groups = _groupManagement.GetAll();
+        if (groups.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[red]No groups configured. Create one first.[/]");
+            _consoleHelper.WaitForKey();
+            return;
+        }
+
+        var groupNames = groups.Select(g => g.Name).ToList();
+        groupNames.Add(MenuLabels.Back);
+
+        var selectedName = AnsiConsole.Prompt(
+            new SelectionPrompt<string>()
+                .Title("Select a [green]group[/] ([grey]clear search for Back[/]):")
+                .PageSize(10)
+                .EnableSearch()
+                .AddChoices(groupNames));
+
+        if (selectedName == MenuLabels.Back)
+        {
+            return;
+        }
+
+        var group = groups.First(g => g.Name == selectedName);
+        var hosts = config.Hosts.Where(h => h.GroupId == group.Id).ToList();
+
+        if (hosts.Count == 0)
+        {
+            AnsiConsole.MarkupLine($"[red]No servers in group '[cyan]{Markup.Escape(group.Name)}[/]'.[/]");
+            _consoleHelper.WaitForKey();
+            return;
+        }
+
+        AnsiConsole.Clear();
+        AnsiConsole.MarkupLine($"[bold cyan]Group: {Markup.Escape(group.Name)}[/]");
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine("[grey]Interactive mode — type a command to run on all servers.[/]");
+        AnsiConsole.MarkupLine("[grey]Leave empty or type [bold]exit[/] to quit.[/]");
+        AnsiConsole.WriteLine();
+
+        while (true)
+        {
+            Console.Write("$ ");
+            var line = Console.ReadLine();
+
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                break;
+            }
+
+            var trimmed = line.Trim();
+            if (trimmed.Equals("exit", StringComparison.OrdinalIgnoreCase))
+            {
+                break;
+            }
+
+            AnsiConsole.WriteLine();
+
+            foreach (var host in hosts)
+            {
+                var header = $"-- {host.Alias} ({host.User}@{host.HostName}) ";
+                AnsiConsole.Markup($"[bold]{Markup.Escape(header)}[/]");
+                Console.WriteLine(new string('-', Math.Max(1, 60 - header.Length)));
+
+                try
+                {
+                    var output = await _processService.RunSshCommand(host, trimmed);
+                    Console.Write(output);
+
+                    if (!output.EndsWith('\n'))
+                    {
+                        Console.WriteLine();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    AnsiConsole.MarkupLine($"[red]Error: {Markup.Escape(ex.Message)}[/]");
+                }
+
+                AnsiConsole.WriteLine();
+            }
+        }
     }
 
     private async Task ConnectToServer(AppConfig config)
@@ -253,28 +283,22 @@ public sealed class MainMenuService : IMainMenuService
         var containers = host.DockerInfo?.Containers;
         if (containers is { Count: > 0 })
         {
-            var containerEntries = containers
-                .Select(c => (Container: c, Entry: new MenuEntry($"{Markup.Escape(c.Name)}  [grey]({c.Image})[/]")))
-                .ToList();
-
-            var choices = new List<MenuEntry> { new("Connect", 'C') };
-            choices.AddRange(containerEntries.Select(ce => ce.Entry));
-            choices.Add(new MenuEntry("Back", 'B'));
-
-            var selected = _keyboardShortcut.ShowMenu(
-                $"[bold yellow]Connect to {Markup.Escape(host.Alias)}[/]",
-                choices);
-
-            if (selected?.Label == "Connect")
+            var menuEntries = new List<MenuEntry>
             {
-                await _consoleHelper.RunSsh(host);
-            }
-            else if (selected?.Label != "Back" && selected is not null)
+                new("Connect", 'C', executeAsync: () => _consoleHelper.RunSsh(host))
+            };
+
+            foreach (var container in containers)
             {
-                var container = containerEntries.First(ce => ce.Entry.Label == selected.Label).Container;
-                await ShowContainerActions(host, container);
+                var capturedContainer = container;
+                menuEntries.Add(new MenuEntry(
+                    $"{Markup.Escape(container.Name)}  [grey]({container.Image})[/]",
+                    executeAsync: () => ShowContainerActions(host, capturedContainer)));
             }
 
+            menuEntries.Add(new MenuEntry("Back", 'B', actionType: MenuActionType.Back));
+
+            await _menuFactory.RunMenu($"[bold yellow]Connect to {Markup.Escape(host.Alias)}[/]", menuEntries);
             return;
         }
 
@@ -283,23 +307,14 @@ public sealed class MainMenuService : IMainMenuService
 
     private async Task ShowContainerActions(ServerHost host, ContainerModel container)
     {
-        var choice = _keyboardShortcut.ShowMenu(
-            $"[bold yellow]{Markup.Escape(container.Name)}[/]",
-            [
-                new MenuEntry("Exec (sh)", 'E'),
-                new MenuEntry("Logs (-f)", 'L'),
-                new MenuEntry("Back", 'B')
-            ]);
-
-        switch (choice?.Label)
+        var menuEntries = new List<MenuEntry>
         {
-            case "Exec (sh)":
-                await _consoleHelper.RunDockerExec(host, container);
-                break;
-            case "Logs (-f)":
-                await _consoleHelper.RunDockerLogs(host, container);
-                break;
-        }
+            new("Exec (sh)", 'E', executeAsync: () => _consoleHelper.RunDockerExec(host, container)),
+            new("Logs (-f)", 'L', executeAsync: () => _consoleHelper.RunDockerLogs(host, container)),
+            new("Back", 'B', actionType: MenuActionType.Back)
+        };
+
+        await _menuFactory.RunMenu($"[bold yellow]{Markup.Escape(container.Name)}[/]", menuEntries);
     }
 
     private void EditServer(AppConfig config)

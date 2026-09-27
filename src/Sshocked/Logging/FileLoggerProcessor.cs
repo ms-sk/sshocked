@@ -68,12 +68,10 @@ public sealed class FileLoggerProcessor : IDisposable
         if (fileInfo.Length < MaxFileSizeBytes)
             return;
 
-        // Delete the oldest backup
         var oldestBackup = Path.Combine(_logDir, $"sshocked.{MaxBackupFiles}.log");
         if (File.Exists(oldestBackup))
             File.Delete(oldestBackup);
 
-        // Shift backups: .2 -> .3, .1 -> .2, etc.
         for (int i = MaxBackupFiles - 1; i >= 1; i--)
         {
             var src = Path.Combine(_logDir, $"sshocked.{i}.log");
@@ -82,7 +80,6 @@ public sealed class FileLoggerProcessor : IDisposable
                 File.Move(src, dst, overwrite: true);
         }
 
-        // Rename current log to .1
         File.Move(_logFilePath, Path.Combine(_logDir, "sshocked.1.log"), overwrite: true);
     }
 

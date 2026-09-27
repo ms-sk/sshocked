@@ -13,7 +13,6 @@ public sealed class ArgumentParserService : IArgumentParserService
 
         var first = args[0].ToLowerInvariant();
 
-        // Check for flags first
         if (first is "--help" or "-h")
         {
             return new ParseResult { ShowHelp = true };
@@ -29,7 +28,36 @@ public sealed class ArgumentParserService : IArgumentParserService
             return new ParseResult { ShowList = true };
         }
 
-        // Anything else is treated as a positional argument (alias or group name)
+        if (first is "--group" or "-g")
+        {
+            if (args.Length < 3)
+            {
+                return new ParseResult { ShowHelp = true };
+            }
+
+            var groupName = args[1];
+            var commandStart = 2;
+
+            if (commandStart < args.Length && args[commandStart] == "--")
+            {
+                commandStart++;
+            }
+
+            var command = string.Join(" ", args.Skip(commandStart));
+
+            if (string.IsNullOrWhiteSpace(command))
+            {
+                return new ParseResult { ShowHelp = true };
+            }
+
+            return new ParseResult
+            {
+                HasGroupCommand = true,
+                GroupName = groupName,
+                Command = command
+            };
+        }
+
         return new ParseResult
         {
             HasPositionalArg = true,

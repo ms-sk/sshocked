@@ -13,9 +13,10 @@ public sealed class GroupMenuService : IGroupMenuService
     private readonly ITableRendererService _tableRenderer;
     private readonly IHostSelectorService _hostSelector;
     private readonly IConsoleHelperService _consoleHelper;
-    private readonly IKeyboardShortcutService _keyboardShortcut;
+    private readonly IMenuFactory _menuFactory;
     private readonly INavigationService _nav;
     private readonly IGroupConnectionService _groupConnection;
+    private readonly IProcessService _processService;
     private readonly ILogger<GroupMenuService> _logger;
 
     public GroupMenuService(
@@ -25,9 +26,10 @@ public sealed class GroupMenuService : IGroupMenuService
         ITableRendererService tableRenderer,
         IHostSelectorService hostSelector,
         IConsoleHelperService consoleHelper,
-        IKeyboardShortcutService keyboardShortcut,
+        IMenuFactory menuFactory,
         INavigationService nav,
         IGroupConnectionService groupConnection,
+        IProcessService processService,
         ILogger<GroupMenuService> logger)
     {
         _configRepository = configRepository;
@@ -36,9 +38,10 @@ public sealed class GroupMenuService : IGroupMenuService
         _tableRenderer = tableRenderer;
         _hostSelector = hostSelector;
         _consoleHelper = consoleHelper;
-        _keyboardShortcut = keyboardShortcut;
+        _menuFactory = menuFactory;
         _nav = nav;
         _groupConnection = groupConnection;
+        _processService = processService;
         _logger = logger;
     }
 
@@ -104,28 +107,25 @@ public sealed class GroupMenuService : IGroupMenuService
                 _tableRenderer.RenderGroup(group.Name, groupHosts);
             }
 
-            var choices = new List<MenuEntry> { new("Select server...", 'S') };
+            var menuEntries = new List<MenuEntry>
+            {
+                new("Select server...", 'S', executeAsync: () => { SelectServerFromGroup(config, group); return Task.CompletedTask; })
+            };
+
             if (groupHosts.Count > 0)
             {
-                choices.Add(new MenuEntry("Connect all", 'C'));
+                menuEntries.Add(new MenuEntry("Connect all", 'C', executeAsync: () => ConnectAll(groupHosts)));
+                menuEntries.Add(new MenuEntry("Run command", 'R', executeAsync: () => RunCommandOnGroup(groupHosts)));
             }
-            choices.Add(new MenuEntry("Back", 'B'));
 
-            var choice = _keyboardShortcut.ShowMenu(
-                "[bold yellow]Group Actions[/]",
-                choices);
+            menuEntries.Add(new MenuEntry("Back", 'B', actionType: MenuActionType.Back));
 
-            switch (choice?.Label)
+            var shouldContinue = await _menuFactory.RunMenu("[bold yellow]Group Actions[/]", menuEntries);
+
+            if (!shouldContinue)
             {
-                case "Select server...":
-                    SelectServerFromGroup(config, group);
-                    break;
-                case "Connect all":
-                    await ConnectAll(groupHosts);
-                    break;
-                case "Back":
-                    _nav.Pop();
-                    return;
+                _nav.Pop();
+                return;
             }
         }
     }
@@ -152,28 +152,68 @@ public sealed class GroupMenuService : IGroupMenuService
         _serverMenu.ShowServerActions(config, host);
     }
 
+    private async Task RunCommandOnGroup(List<ServerHost> hosts)
+    {
+        AnsiConsole.MarkupLine("[grey]Interactive mode — type a command to run on all servers.[/]");
+        AnsiConsole.MarkupLine("[grey]Leave empty or type [bold]exit[/] to quit.[/]");
+        AnsiConsole.WriteLine();
+
+        while (true)
+        {
+            Console.Write("$ ");
+            var line = Console.ReadLine();
+
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                break;
+            }
+
+            var trimmed = line.Trim();
+            if (trimmed.Equals("exit", StringComparison.OrdinalIgnoreCase))
+            {
+                break;
+            }
+
+            AnsiConsole.WriteLine();
+
+            foreach (var host in hosts)
+            {
+                var header = $"-- {host.Alias} ({host.User}@{host.HostName}) ";
+                AnsiConsole.Markup($"[bold]{Markup.Escape(header)}[/]");
+                Console.WriteLine(new string('-', Math.Max(1, 60 - header.Length)));
+
+                try
+                {
+                    var output = await _processService.RunSshCommand(host, trimmed);
+                    Console.Write(output);
+
+                    if (!output.EndsWith('\n'))
+                    {
+                        Console.WriteLine();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    AnsiConsole.MarkupLine($"[red]Error: {Markup.Escape(ex.Message)}[/]");
+                }
+
+                AnsiConsole.WriteLine();
+            }
+        }
+    }
+
     private async Task ConnectAll(List<ServerHost> hosts)
     {
         if (_groupConnection.CanLaunchMultiTab)
         {
-            var choice = _keyboardShortcut.ShowMenu(
-                "[bold yellow]Connect all — Strategy[/]",
-                [
-                    new MenuEntry("Sequential (one after another)", 'S', ConnectionStrategy.Sequential),
-                    new MenuEntry("Multi-Tab (new terminal windows)", 'M', ConnectionStrategy.MultiTab),
-                    new MenuEntry("Back", 'B')
-                ]);
-
-            switch (choice?.Tag)
+            var menuEntries = new List<MenuEntry>
             {
-                case ConnectionStrategy.Sequential:
-                    await _groupConnection.ConnectAllSequential(hosts);
-                    break;
-                case ConnectionStrategy.MultiTab:
-                    await _groupConnection.ConnectAllMultiTab(hosts);
-                    break;
-            }
+                new("Sequential (one after another)", 'S', executeAsync: () => _groupConnection.ConnectAllSequential(hosts)),
+                new("Multi-Tab (new terminal windows)", 'M', executeAsync: () => _groupConnection.ConnectAllMultiTab(hosts)),
+                new("Back", 'B', actionType: MenuActionType.Back)
+            };
 
+            await _menuFactory.RunMenu("[bold yellow]Connect all — Strategy[/]", menuEntries);
             return;
         }
 

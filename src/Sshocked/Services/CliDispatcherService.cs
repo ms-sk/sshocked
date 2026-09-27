@@ -8,15 +8,18 @@ public sealed class CliDispatcherService : ICliDispatcherService
 {
     private readonly IConfigRepository _configRepository;
     private readonly ISshRunnerService _sshRunner;
+    private readonly IProcessService _processService;
     private readonly ILogger<CliDispatcherService> _logger;
 
     public CliDispatcherService(
         IConfigRepository configRepository,
         ISshRunnerService sshRunner,
+        IProcessService processService,
         ILogger<CliDispatcherService> logger)
     {
         _configRepository = configRepository;
         _sshRunner = sshRunner;
+        _processService = processService;
         _logger = logger;
     }
 
@@ -40,6 +43,11 @@ public sealed class CliDispatcherService : ICliDispatcherService
             return true;
         }
 
+        if (parseResult.HasGroupCommand && parseResult.GroupName is not null && parseResult.Command is not null)
+        {
+            return await ExecuteGroupCommand(parseResult.GroupName, parseResult.Command);
+        }
+
         if (parseResult.HasPositionalArg && parseResult.PositionalArg is not null)
         {
             return await ConnectToTarget(parseResult.PositionalArg);
@@ -48,11 +56,70 @@ public sealed class CliDispatcherService : ICliDispatcherService
         return false;
     }
 
+    private async Task<bool> ExecuteGroupCommand(string groupName, string command)
+    {
+        var config = _configRepository.Load();
+
+        var group = config.Groups.FirstOrDefault(g =>
+            g.Name.Equals(groupName, StringComparison.OrdinalIgnoreCase));
+
+        if (group is null)
+        {
+            Console.WriteLine($"Error: Group '{groupName}' not found.");
+            Console.WriteLine("Run 'ssk --list' to see available groups.");
+            return true;
+        }
+
+        var hosts = config.Hosts.Where(h => h.GroupId == group.Id).ToList();
+        if (hosts.Count == 0)
+        {
+            Console.WriteLine($"Group '{group.Name}' has no servers.");
+            return true;
+        }
+
+        Console.WriteLine($"Executing on group '{group.Name}' ({hosts.Count} server{(hosts.Count == 1 ? "" : "s")}):");
+        Console.WriteLine($"  $ {command}");
+        Console.WriteLine();
+
+        var hasErrors = false;
+
+        foreach (var host in hosts)
+        {
+            var header = $"-- {host.Alias} ({host.User}@{host.HostName}) ";
+            Console.Write(header);
+            Console.WriteLine(new string('-', Math.Max(1, 60 - header.Length)));
+
+            try
+            {
+                var output = await _processService.RunSshCommand(host, command);
+                Console.Write(output);
+
+                if (!output.EndsWith('\n'))
+                {
+                    Console.WriteLine();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[error] {ex.Message}");
+                hasErrors = true;
+            }
+
+            Console.WriteLine();
+        }
+
+        if (hasErrors)
+        {
+            Console.WriteLine("Completed with errors on some servers.");
+        }
+
+        return true;
+    }
+
     private async Task<bool> ConnectToTarget(string target)
     {
         var config = _configRepository.Load();
 
-        // Try matching as a server alias (case-insensitive)
         var host = config.Hosts.FirstOrDefault(h =>
             h.Alias.Equals(target, StringComparison.OrdinalIgnoreCase));
 
@@ -63,7 +130,6 @@ public sealed class CliDispatcherService : ICliDispatcherService
             return true;
         }
 
-        // Try matching as a hostname (case-insensitive)
         host = config.Hosts.FirstOrDefault(h =>
             h.HostName.Equals(target, StringComparison.OrdinalIgnoreCase));
 
@@ -74,7 +140,6 @@ public sealed class CliDispatcherService : ICliDispatcherService
             return true;
         }
 
-        // Try matching as a group name (case-insensitive)
         var group = config.Groups.FirstOrDefault(g =>
             g.Name.Equals(target, StringComparison.OrdinalIgnoreCase));
 
@@ -112,6 +177,7 @@ public sealed class CliDispatcherService : ICliDispatcherService
         Console.WriteLine("  ssk <alias>                Connect directly to a server by alias");
         Console.WriteLine("  ssk <hostname>             Connect directly to a server by hostname");
         Console.WriteLine("  ssk <group>                Connect to all servers in a group");
+        Console.WriteLine("  ssk --group, -g <name> -- <cmd>  Run a command on all servers in a group");
         Console.WriteLine("  ssk --list, -l             List all configured servers and groups");
         Console.WriteLine("  ssk --help, -h             Show this help message");
         Console.WriteLine("  ssk --version, -v          Show version information");
@@ -119,6 +185,8 @@ public sealed class CliDispatcherService : ICliDispatcherService
         Console.WriteLine("Examples:");
         Console.WriteLine("  ssk prod-db-01             Connect to server 'prod-db-01'");
         Console.WriteLine("  ssk production             Connect to all servers in group 'production'");
+        Console.WriteLine("  ssk -g production -- uptime     Run 'uptime' on all servers in 'production'");
+        Console.WriteLine("  ssk -g web \"df -h /\"           Run 'df -h /' on all servers in 'web'");
     }
 
     private static void PrintVersion()
@@ -137,7 +205,6 @@ public sealed class CliDispatcherService : ICliDispatcherService
             return;
         }
 
-        // Print groups
         if (config.Groups.Count > 0)
         {
             Console.WriteLine("Groups:");
@@ -149,7 +216,6 @@ public sealed class CliDispatcherService : ICliDispatcherService
             Console.WriteLine();
         }
 
-        // Print servers
         if (config.Hosts.Count > 0)
         {
             Console.WriteLine("Servers:");

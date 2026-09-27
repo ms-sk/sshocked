@@ -39,7 +39,6 @@ public sealed class DockerService : IDockerService
 
         var sudo = BuildSudoPrefix(host.SudoPassword);
 
-        // Step 1: Check if Docker is available
         var dockerInfoOutput = await _processService.RunSshCommand(host, $"{sudo}docker info --format '{{{{json .}}}}' 2>/dev/null || echo 'DOCKER_NOT_AVAILABLE'");
         dockerInfoOutput = dockerInfoOutput.Trim();
 
@@ -54,7 +53,6 @@ public sealed class DockerService : IDockerService
 
         info.DockerAvailable = true;
 
-        // Parse docker info JSON
         try
         {
             using var doc = JsonDocument.Parse(dockerInfoOutput);
@@ -80,11 +78,9 @@ public sealed class DockerService : IDockerService
             _logger.LogWarning(ex, "Failed to parse docker info JSON from {Alias}", host.Alias);
         }
 
-        // Step 2: List containers
         var containersOutput = await _processService.RunSshCommand(host, $"{sudo}docker ps -a --format '{{{{json .}}}}' 2>/dev/null");
         info.Containers = ParseContainerJson(containersOutput);
 
-        // Step 3: List Compose stacks
         var composeOutput = await _processService.RunSshCommand(host, $"{sudo}docker compose ls --format '{{{{json .}}}}' 2>/dev/null");
         info.ComposeStacks = ParseComposeStackJson(composeOutput);
 

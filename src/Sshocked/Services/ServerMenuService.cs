@@ -13,7 +13,7 @@ public sealed class ServerMenuService : IServerMenuService
     private readonly IHostSelectorService _hostSelector;
     private readonly IConsoleHelperService _consoleHelper;
     private readonly IDockerService _dockerService;
-    private readonly IKeyboardShortcutService _keyboardShortcut;
+    private readonly IMenuFactory _menuFactory;
     private readonly INavigationService _nav;
     private readonly ILogger<ServerMenuService> _logger;
 
@@ -24,7 +24,7 @@ public sealed class ServerMenuService : IServerMenuService
         IHostSelectorService hostSelector,
         IConsoleHelperService consoleHelper,
         IDockerService dockerService,
-        IKeyboardShortcutService keyboardShortcut,
+        IMenuFactory menuFactory,
         INavigationService nav,
         ILogger<ServerMenuService> logger)
     {
@@ -34,7 +34,7 @@ public sealed class ServerMenuService : IServerMenuService
         _hostSelector = hostSelector;
         _consoleHelper = consoleHelper;
         _dockerService = dockerService;
-        _keyboardShortcut = keyboardShortcut;
+        _menuFactory = menuFactory;
         _nav = nav;
         _logger = logger;
     }
@@ -71,53 +71,49 @@ public sealed class ServerMenuService : IServerMenuService
     public async Task ShowServerActions(AppConfig config, ServerHost host)
     {
         _nav.Push(ViewType.ServerDetail);
+        bool shouldExit = false;
 
-        while (_nav.Current == ViewType.ServerDetail)
+        while (_nav.Current == ViewType.ServerDetail && !shouldExit)
         {
             AnsiConsole.Clear();
             RenderServerHeader(host);
             RenderDockerSummary(host);
 
-            var choice = _keyboardShortcut.ShowMenu(
-                "[bold yellow]Server Actions[/]",
-                [
-                    new MenuEntry("Connect", 'C'),
-                    new MenuEntry("Scan Docker", 'D'),
-                    new MenuEntry("Edit", 'E'),
-                    new MenuEntry("Delete", 'L'),
-                    new MenuEntry("Back", 'B')
-                ]);
-
-            switch (choice?.Label)
+            var menuEntries = new List<MenuEntry>
             {
-                case "Connect":
-                    await _consoleHelper.RunSsh(host);
-                    break;
-                case "Scan Docker":
-                    await ScanDockerForHost(host);
-                    break;
-                case "Edit":
+                new("Connect", 'C', executeAsync: () => _consoleHelper.RunSsh(host)),
+                new("Scan Docker", 'D', executeAsync: () => ScanDockerForHost(host)),
+                new("Edit", 'E', executeAsync: () =>
+                {
                     _serverCrud.Edit(host);
                     AnsiConsole.MarkupLine($"[green]\u2713[/] Server '[cyan]{Markup.Escape(host.Alias)}[/]' updated.");
                     _consoleHelper.WaitForKey();
-                    break;
-                case "Delete":
+                    return Task.CompletedTask;
+                }),
+                new("Delete", 'L', executeAsync: () =>
+                {
                     if (_serverCrud.Delete(host))
                     {
                         AnsiConsole.MarkupLine($"[green]\u2713[/] Server '[cyan]{Markup.Escape(host.Alias)}[/]' deleted.");
                         _consoleHelper.WaitForKey();
-                        _nav.Pop();
-                        return;
+                        shouldExit = true;
                     }
                     else
                     {
                         AnsiConsole.MarkupLine("[grey]Deletion cancelled.[/]");
                         _consoleHelper.WaitForKey();
                     }
-                    break;
-                case "Back":
-                    _nav.Pop();
-                    return;
+                    return Task.CompletedTask;
+                }),
+                new("Back", 'B', actionType: MenuActionType.Back)
+            };
+
+            var shouldContinue = await _menuFactory.RunMenu("[bold yellow]Server Actions[/]", menuEntries);
+
+            if (!shouldContinue || shouldExit)
+            {
+                _nav.Pop();
+                return;
             }
         }
     }
