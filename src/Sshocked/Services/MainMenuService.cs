@@ -5,7 +5,7 @@ using Sshocked.Models;
 
 namespace Sshocked.Services;
 
-public sealed class MainMenuService(IConfigRepository configRepository, IServerCrudService serverCrud, IGroupManagementService groupManagement, IGroupMenuService groupMenu, IServerMenuService serverMenu, ITableRendererService tableRenderer, IHostSelectorService hostSelector, IConsoleHelperService consoleHelper, IGroupConnectionService groupConnection, IProcessService processService, IMenuFactory menuFactory, ILogger<MainMenuService> logger) : IMainMenuService
+public sealed class MainMenuService(IConfigRepository configRepository, IServerCrudService serverCrud, IGroupManagementService groupManagement, IGroupMenuService groupMenu, IServerMenuService serverMenu, ITableRendererService tableRenderer, IHostSelectorService hostSelector, IConsoleHelperService consoleHelper, IGroupConnectionService groupConnection, IContainerService containerService, IContainerGroupService containerGroupService, IProcessService processService, IMenuFactory menuFactory, ILogger<MainMenuService> logger) : IMainMenuService
 {
 
     public async Task Show()
@@ -115,20 +115,30 @@ public sealed class MainMenuService(IConfigRepository configRepository, IServerC
 
         var group = groups.First(g => g.Name == selectedName);
         var hosts = config.Hosts.Where(h => h.GroupId == group.Id).ToList();
+        var containers = containerService.GetSavedByGroup(config, group.Id);
 
-        if (hosts.Count == 0)
+        if (hosts.Count == 0 && containers.Count == 0)
         {
-            AnsiConsole.MarkupLine($"[red]No servers in group '[cyan]{Markup.Escape(group.Name)}[/]'.[/]");
+            AnsiConsole.MarkupLine($"[red]No servers or containers in group '[cyan]{Markup.Escape(group.Name)}[/]'.[/]");
             consoleHelper.WaitForKey();
             return;
         }
 
-        var menuEntries = new List<MenuEntry>
-            {
-                new("Sequential (one after another)", 'S', executeAsync: () => groupConnection.ConnectAllSequential(hosts)),
-                new("Multi-Tab (new terminal windows)", 'M', executeAsync: () => groupConnection.ConnectAllMultiTab(hosts)),
-                new("Back", 'B', actionType: MenuActionType.Back)
-            };
+        var menuEntries = new List<MenuEntry>();
+
+        if (hosts.Count > 0)
+        {
+            menuEntries.Add(new MenuEntry("Connect all servers (sequential)", 'Q', executeAsync: () => groupConnection.ConnectAllSequential(hosts)));
+            menuEntries.Add(new MenuEntry("Connect all servers (multi-tab)", 'W', executeAsync: () => groupConnection.ConnectAllMultiTab(hosts)));
+        }
+
+        if (containers.Count > 0)
+        {
+            menuEntries.Add(new MenuEntry("Exec all containers (sequential)", 'E', executeAsync: () => containerGroupService.ExecAllSequential(config, containers)));
+            menuEntries.Add(new MenuEntry("Exec all containers (multi-tab)", 'X', executeAsync: () => containerGroupService.ExecAllMultiTab(config, containers)));
+        }
+
+        menuEntries.Add(new MenuEntry("Back", 'B', actionType: MenuActionType.Back));
 
         await menuFactory.RunMenu($"[bold yellow]Connect group: {Markup.Escape(group.Name)}[/]", menuEntries);
     }
@@ -160,18 +170,64 @@ public sealed class MainMenuService(IConfigRepository configRepository, IServerC
 
         var group = groups.First(g => g.Name == selectedName);
         var hosts = config.Hosts.Where(h => h.GroupId == group.Id).ToList();
+        var containers = containerService.GetSavedByGroup(config, group.Id);
 
-        if (hosts.Count == 0)
+        if (hosts.Count == 0 && containers.Count == 0)
         {
-            AnsiConsole.MarkupLine($"[red]No servers in group '[cyan]{Markup.Escape(group.Name)}[/]'.[/]");
+            AnsiConsole.MarkupLine($"[red]No servers or containers in group '[cyan]{Markup.Escape(group.Name)}[/]'.[/]");
             consoleHelper.WaitForKey();
             return;
+        }
+
+        var targetMenu = new List<MenuEntry>();
+        if (hosts.Count > 0)
+        {
+            targetMenu.Add(new MenuEntry("Run on servers", 'S'));
+        }
+        if (containers.Count > 0)
+        {
+            targetMenu.Add(new MenuEntry("Run on containers", 'T'));
+        }
+        targetMenu.Add(new MenuEntry("Back", 'B', actionType: MenuActionType.Back));
+
+        var targetChoice = await menuFactory.RunMenu("[bold yellow]Run command on...[/]", targetMenu);
+        if (!targetChoice)
+        {
+            return;
+        }
+
+        // Note: This is simplified - in a real scenario we'd track which option was selected
+        // For now, we check if we have both and ask, otherwise use what's available
+        bool runOnServers;
+        if (hosts.Count > 0 && containers.Count == 0)
+        {
+            runOnServers = true;
+        }
+        else if (containers.Count > 0 && hosts.Count == 0)
+        {
+            runOnServers = false;
+        }
+        else
+        {
+            // Re-prompt with selection
+            var target = AnsiConsole.Prompt(
+                new SelectionPrompt<string>()
+                    .Title("Run on [green]servers[/] or [green]containers[/]?")
+                    .AddChoices(["Servers", "Containers"]));
+            runOnServers = target == "Servers";
         }
 
         AnsiConsole.Clear();
         AnsiConsole.MarkupLine($"[bold cyan]Group: {Markup.Escape(group.Name)}[/]");
         AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine("[grey]Interactive mode — type a command to run on all servers.[/]");
+        if (runOnServers)
+        {
+            AnsiConsole.MarkupLine("[grey]Interactive mode — type a command to run on all servers.[/]");
+        }
+        else
+        {
+            AnsiConsole.MarkupLine("[grey]Interactive mode — type a command to run on all containers.[/]");
+        }
         AnsiConsole.MarkupLine("[grey]Leave empty or type [bold]exit[/] to quit.[/]");
         AnsiConsole.WriteLine();
 
@@ -193,28 +249,35 @@ public sealed class MainMenuService(IConfigRepository configRepository, IServerC
 
             AnsiConsole.WriteLine();
 
-            foreach (var host in hosts)
+            if (runOnServers)
             {
-                var header = $"-- {host.Alias} ({host.User}@{host.HostName}) ";
-                AnsiConsole.Markup($"[bold]{Markup.Escape(header)}[/]");
-                Console.WriteLine(new string('-', Math.Max(1, 60 - header.Length)));
-
-                try
+                foreach (var host in hosts)
                 {
-                    var output = await processService.RunSshCommand(host, trimmed);
-                    Console.Write(output);
+                    var header = $"-- {host.Alias} ({host.User}@{host.HostName}) ";
+                    AnsiConsole.Markup($"[bold]{Markup.Escape(header)}[/]");
+                    Console.WriteLine(new string('-', Math.Max(1, 60 - header.Length)));
 
-                    if (!output.EndsWith('\n'))
+                    try
                     {
-                        Console.WriteLine();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    AnsiConsole.MarkupLine($"[red]Error: {Markup.Escape(ex.Message)}[/]");
-                }
+                        var output = await processService.RunSshCommand(host, trimmed);
+                        Console.Write(output);
 
-                AnsiConsole.WriteLine();
+                        if (!output.EndsWith('\n'))
+                        {
+                            Console.WriteLine();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        AnsiConsole.MarkupLine($"[red]Error: {Markup.Escape(ex.Message)}[/]");
+                    }
+
+                    AnsiConsole.WriteLine();
+                }
+            }
+            else
+            {
+                await containerGroupService.RunCommandOnAll(config, containers, trimmed);
             }
         }
     }
@@ -234,20 +297,33 @@ public sealed class MainMenuService(IConfigRepository configRepository, IServerC
             return;
         }
 
-        var containers = host.DockerInfo?.Containers;
-        if (containers is { Count: > 0 })
+        var scannedContainers = host.DockerInfo?.Containers ?? [];
+        var savedContainers = host.SavedContainers;
+
+        if (scannedContainers.Count > 0 || savedContainers.Count > 0)
         {
             var menuEntries = new List<MenuEntry>
             {
-                new("Connect", 'C', executeAsync: () => consoleHelper.RunSsh(host))
+                new("Connect (SSH)", 'S', executeAsync: () => consoleHelper.RunSsh(host))
             };
 
-            foreach (var container in containers)
+            foreach (var container in scannedContainers)
             {
+                var isSaved = savedContainers.Any(sc => sc.ContainerId == container.ContainerId || sc.Name == container.Name);
+                var savedMarker = isSaved ? "[green]\u2713[/] " : "";
                 var capturedContainer = container;
                 menuEntries.Add(new MenuEntry(
-                    $"{Markup.Escape(container.Name)}  [grey]({container.Image})[/]",
-                    executeAsync: () => ShowContainerActions(host, capturedContainer)));
+                    $"{savedMarker}{Markup.Escape(container.Name)}  [grey]({container.Image})[/]",
+                    executeAsync: () => ShowScannedContainerActions(host, capturedContainer)));
+            }
+
+            foreach (var container in savedContainers)
+            {
+                var capturedContainer = container;
+                var displayName = container.Alias ?? container.Name;
+                menuEntries.Add(new MenuEntry(
+                    $"[bold][cyan]*[/] {Markup.Escape(displayName)}[/]  [grey]({container.Image})[/]",
+                    executeAsync: () => ShowSavedContainerActions(host, capturedContainer)));
             }
 
             menuEntries.Add(new MenuEntry("Back", 'B', actionType: MenuActionType.Back));
@@ -259,16 +335,64 @@ public sealed class MainMenuService(IConfigRepository configRepository, IServerC
         await consoleHelper.RunSsh(host);
     }
 
-    private async Task ShowContainerActions(ServerHost host, ContainerModel container)
+    private async Task ShowScannedContainerActions(ServerHost host, ContainerModel container)
     {
+        var config = configRepository.Load();
+        var currentHost = config.Hosts.First(h => h.Id == host.Id);
+        var isSaved = currentHost.SavedContainers.Any(
+            sc => sc.ContainerId == container.ContainerId || sc.Name == container.Name);
+
+        var menuEntries = new List<MenuEntry>
+        {
+            new("Exec (sh)", 'E', executeAsync: () => consoleHelper.RunDockerExec(host, container)),
+            new("Logs (-f)", 'L', executeAsync: () => consoleHelper.RunDockerLogs(host, container))
+        };
+
+        if (!isSaved)
+        {
+            menuEntries.Add(new MenuEntry("Save...", 'V', executeAsync: () =>
+            {
+                containerService.Save(host, container);
+                return Task.CompletedTask;
+            }));
+        }
+
+        menuEntries.Add(new MenuEntry("Back", 'B', actionType: MenuActionType.Back));
+
+        await menuFactory.RunMenu($"[bold yellow]{Markup.Escape(container.Name)}[/]", menuEntries);
+    }
+
+    private async Task ShowSavedContainerActions(ServerHost host, ContainerModel container)
+    {
+        var displayName = container.Alias ?? container.Name;
+
         var menuEntries = new List<MenuEntry>
         {
             new("Exec (sh)", 'E', executeAsync: () => consoleHelper.RunDockerExec(host, container)),
             new("Logs (-f)", 'L', executeAsync: () => consoleHelper.RunDockerLogs(host, container)),
+            new("Edit", 'I', executeAsync: () =>
+            {
+                containerService.Edit(host, container);
+                return Task.CompletedTask;
+            }),
+            new("Delete", 'D', executeAsync: () =>
+            {
+                if (containerService.Delete(host, container))
+                {
+                    AnsiConsole.MarkupLine($"[green]\u2713[/] Container '[cyan]{Markup.Escape(displayName)}[/]' deleted.");
+                    consoleHelper.WaitForKey();
+                }
+                else
+                {
+                    AnsiConsole.MarkupLine("[grey]Deletion cancelled.[/]");
+                    consoleHelper.WaitForKey();
+                }
+                return Task.CompletedTask;
+            }),
             new("Back", 'B', actionType: MenuActionType.Back)
         };
 
-        await menuFactory.RunMenu($"[bold yellow]{Markup.Escape(container.Name)}[/]", menuEntries);
+        await menuFactory.RunMenu($"[bold yellow]{Markup.Escape(displayName)}[/]", menuEntries);
     }
 
     private void EditServer(AppConfig config)

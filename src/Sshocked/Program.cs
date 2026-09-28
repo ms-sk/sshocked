@@ -71,6 +71,8 @@ static void ConfigureServices(IServiceCollection services)
     services.AddSingleton<ISshRunnerService, SshRunnerService>();
     services.AddSingleton<IGroupConnectionService, GroupConnectionService>();
     services.AddSingleton<IDockerService, DockerService>();
+    services.AddSingleton<IContainerService, ContainerService>();
+    services.AddSingleton<IContainerGroupService, ContainerGroupService>();
     services.AddSingleton<INavigationService, NavigationService>();
     services.AddSingleton<IProcessService, ProcessService>();
     services.AddSingleton<IGroupMenuService, GroupMenuService>();

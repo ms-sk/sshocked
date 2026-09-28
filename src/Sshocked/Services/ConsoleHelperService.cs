@@ -25,6 +25,8 @@ public sealed class ConsoleHelperService(IProcessService processService, IDocker
 
     public async Task RunDockerExec(ServerHost host, ContainerModel container)
     {
+        EnsureSudoPassword(host);
+
         AnsiConsole.Console.Profile.Capabilities.Interactive = false;
         System.Console.ResetColor();
 
@@ -36,6 +38,8 @@ public sealed class ConsoleHelperService(IProcessService processService, IDocker
 
     public async Task RunDockerLogs(ServerHost host, ContainerModel container)
     {
+        EnsureSudoPassword(host);
+
         AnsiConsole.Console.Profile.Capabilities.Interactive = false;
         System.Console.ResetColor();
 
@@ -43,5 +47,19 @@ public sealed class ConsoleHelperService(IProcessService processService, IDocker
 
         System.Console.ResetColor();
         AnsiConsole.Console.Profile.Capabilities.Interactive = true;
+    }
+
+    private static void EnsureSudoPassword(ServerHost host)
+    {
+        if (string.IsNullOrEmpty(host.SudoPassword))
+        {
+            var needsSudo = AnsiConsole.Confirm("Does this host require [yellow]sudo[/] to run Docker commands?", false);
+            if (needsSudo)
+            {
+                host.SudoPassword = AnsiConsole.Prompt(
+                    new TextPrompt<string>("Enter [yellow]sudo password[/]:")
+                        .Secret());
+            }
+        }
     }
 }

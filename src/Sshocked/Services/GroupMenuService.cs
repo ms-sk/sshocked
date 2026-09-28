@@ -5,9 +5,8 @@ using Sshocked.Models;
 
 namespace Sshocked.Services;
 
-public sealed class GroupMenuService(IConfigRepository configRepository, IGroupManagementService groupManagement, IServerMenuService serverMenu, ITableRendererService tableRenderer, IHostSelectorService hostSelector, IConsoleHelperService consoleHelper, IMenuFactory menuFactory, INavigationService nav, IGroupConnectionService groupConnection, IProcessService processService) : IGroupMenuService
+public sealed class GroupMenuService(IConfigRepository configRepository, IGroupManagementService groupManagement, IServerMenuService serverMenu, ITableRendererService tableRenderer, IHostSelectorService hostSelector, IConsoleHelperService consoleHelper, IMenuFactory menuFactory, INavigationService nav, IGroupConnectionService groupConnection, IContainerService containerService, IContainerGroupService containerGroupService, IProcessService processService) : IGroupMenuService
 {
-
     public async Task Browse()
     {
         var groups = groupManagement.GetAll();
@@ -56,29 +55,43 @@ public sealed class GroupMenuService(IConfigRepository configRepository, IGroupM
         {
             config = configRepository.Load();
             var groupHosts = config.Hosts.Where(h => h.GroupId == group.Id).ToList();
+            var groupContainers = containerService.GetSavedByGroup(config, group.Id);
 
             AnsiConsole.Clear();
             AnsiConsole.MarkupLine($"[bold cyan]Group: {Markup.Escape(group.Name)}[/]");
             AnsiConsole.WriteLine();
 
-            if (groupHosts.Count == 0)
+            if (groupHosts.Count == 0 && groupContainers.Count == 0)
             {
-                AnsiConsole.MarkupLine("[grey]No servers in this group.[/]");
+                AnsiConsole.MarkupLine("[grey]No servers or containers in this group.[/]");
             }
             else
             {
-                tableRenderer.RenderGroup(group.Name, groupHosts);
+                if (groupHosts.Count > 0)
+                {
+                    tableRenderer.RenderGroup(group.Name + " (Servers)", groupHosts);
+                }
+
+                if (groupContainers.Count > 0)
+                {
+                    RenderContainerGroup(group.Name + " (Containers)", groupContainers, config);
+                }
             }
 
-            var menuEntries = new List<MenuEntry>
-            {
-                new("Select server...", 'S', executeAsync: () => { SelectServerFromGroup(config, group); return Task.CompletedTask; })
-            };
+            var menuEntries = new List<MenuEntry>();
 
             if (groupHosts.Count > 0)
             {
-                menuEntries.Add(new MenuEntry("Connect all", 'C', executeAsync: () => ConnectAll(groupHosts)));
-                menuEntries.Add(new MenuEntry("Run command", 'R', executeAsync: () => RunCommandOnGroup(groupHosts)));
+                menuEntries.Add(new MenuEntry("Select server...", 'S', executeAsync: () => { SelectServerFromGroup(config, group); return Task.CompletedTask; }));
+                menuEntries.Add(new MenuEntry("Connect all servers", 'C', executeAsync: () => ConnectAllServers(groupHosts)));
+                menuEntries.Add(new MenuEntry("Run command on servers", 'R', executeAsync: () => RunCommandOnServers(groupHosts)));
+            }
+
+            if (groupContainers.Count > 0)
+            {
+                menuEntries.Add(new MenuEntry("Select container...", 'T', executeAsync: () => { SelectContainerFromGroup(config, groupContainers); return Task.CompletedTask; }));
+                menuEntries.Add(new MenuEntry("Exec all containers", 'E', executeAsync: () => ConnectAllContainers(config, groupContainers)));
+                menuEntries.Add(new MenuEntry("Run command on containers", 'X', executeAsync: () => RunCommandOnContainers(config, groupContainers)));
             }
 
             menuEntries.Add(new MenuEntry("Back", 'B', actionType: MenuActionType.Back));
@@ -90,6 +103,119 @@ public sealed class GroupMenuService(IConfigRepository configRepository, IGroupM
                 nav.Pop();
                 return;
             }
+        }
+    }
+
+    private void RenderContainerGroup(string groupName, List<ContainerModel> containers, AppConfig config)
+    {
+        var table = new Table()
+            .Border(TableBorder.Rounded)
+            .Title($"[cyan]{groupName}[/]")
+            .AddColumns([
+                new TableColumn("Alias"),
+                new TableColumn("Container"),
+                new TableColumn("Server"),
+                new TableColumn("Image")
+            ]);
+
+        foreach (var container in containers)
+        {
+            var server = containerGroupService.FindParentServer(config, container);
+            table.AddRow(
+                new Markup($"[bold]{Markup.Escape(container.Alias ?? container.Name)}[/]"),
+                new Text(container.Name),
+                new Text(server?.Alias ?? "?"),
+                new Text(container.Image));
+        }
+
+        AnsiConsole.Write(table);
+        AnsiConsole.WriteLine();
+    }
+
+    private void SelectContainerFromGroup(AppConfig config, List<ContainerModel> containers)
+    {
+        if (containers.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[red]No containers available.[/]");
+            consoleHelper.WaitForKey();
+            return;
+        }
+
+        var names = containers.Select(c => c.Alias ?? c.Name).ToList();
+        names.Add(MenuLabels.Back);
+
+        var selectedName = AnsiConsole.Prompt(
+            new SelectionPrompt<string>()
+                .Title("Select a [green]container[/] ([grey]clear search for Back[/]):")
+                .PageSize(10)
+                .EnableSearch()
+                .AddChoices(names));
+
+        if (selectedName == MenuLabels.Back)
+        {
+            return;
+        }
+
+        var container = containers.First(c => (c.Alias ?? c.Name) == selectedName);
+        var server = containerGroupService.FindParentServer(config, container);
+
+        if (server is not null)
+        {
+            ShowSavedContainerActionsFromGroup(server, container).Wait();
+        }
+    }
+
+    private async Task ShowSavedContainerActionsFromGroup(ServerHost host, ContainerModel container)
+    {
+        var displayName = container.Alias ?? container.Name;
+
+        var menuEntries = new List<MenuEntry>
+        {
+            new("Exec (sh)", 'E', executeAsync: () => consoleHelper.RunDockerExec(host, container)),
+            new("Logs (-f)", 'L', executeAsync: () => consoleHelper.RunDockerLogs(host, container)),
+            new("Back", 'B', actionType: MenuActionType.Back)
+        };
+
+        await menuFactory.RunMenu($"[bold yellow]{Markup.Escape(displayName)}[/]", menuEntries);
+    }
+
+    private async Task ConnectAllContainers(AppConfig config, List<ContainerModel> containers)
+    {
+        var menuEntries = new List<MenuEntry>
+            {
+                new("Sequential (one after another)", 'S', executeAsync: () => containerGroupService.ExecAllSequential(config, containers)),
+                new("Multi-Tab (new terminal windows)", 'M', executeAsync: () => containerGroupService.ExecAllMultiTab(config, containers)),
+                new("Back", 'B', actionType: MenuActionType.Back)
+            };
+
+        await menuFactory.RunMenu("[bold yellow]Exec all containers — Strategy[/]", menuEntries);
+    }
+
+    private async Task RunCommandOnContainers(AppConfig config, List<ContainerModel> containers)
+    {
+        AnsiConsole.MarkupLine("[grey]Interactive mode — type a command to run on all containers.[/]");
+        AnsiConsole.MarkupLine("[grey]Leave empty or type [bold]exit[/] to quit.[/]");
+        AnsiConsole.WriteLine();
+
+        while (true)
+        {
+            Console.Write("$ ");
+            var line = Console.ReadLine();
+
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                break;
+            }
+
+            var trimmed = line.Trim();
+            if (trimmed.Equals("exit", StringComparison.OrdinalIgnoreCase))
+            {
+                break;
+            }
+
+            AnsiConsole.WriteLine();
+
+            await containerGroupService.RunCommandOnAll(config, containers, trimmed);
         }
     }
 
@@ -115,7 +241,7 @@ public sealed class GroupMenuService(IConfigRepository configRepository, IGroupM
         serverMenu.ShowServerActions(config, host);
     }
 
-    private async Task RunCommandOnGroup(List<ServerHost> hosts)
+    private async Task RunCommandOnServers(List<ServerHost> hosts)
     {
         AnsiConsole.MarkupLine("[grey]Interactive mode — type a command to run on all servers.[/]");
         AnsiConsole.MarkupLine("[grey]Leave empty or type [bold]exit[/] to quit.[/]");
@@ -165,7 +291,7 @@ public sealed class GroupMenuService(IConfigRepository configRepository, IGroupM
         }
     }
 
-    private async Task ConnectAll(List<ServerHost> hosts)
+    private async Task ConnectAllServers(List<ServerHost> hosts)
     {
         var menuEntries = new List<MenuEntry>
             {
@@ -174,7 +300,7 @@ public sealed class GroupMenuService(IConfigRepository configRepository, IGroupM
                 new("Back", 'B', actionType: MenuActionType.Back)
             };
 
-        await menuFactory.RunMenu("[bold yellow]Connect all — Strategy[/]", menuEntries);
+        await menuFactory.RunMenu("[bold yellow]Connect all servers — Strategy[/]", menuEntries);
     }
 }
 

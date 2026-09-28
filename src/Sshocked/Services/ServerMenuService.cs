@@ -39,7 +39,6 @@ public sealed class ServerMenuService(IConfigRepository configRepository, IServe
 
     public async Task ShowServerActions(AppConfig config, ServerHost host)
     {
-        nav.Push(ViewType.ServerDetail);
         bool shouldExit = false;
 
         while (nav.Current == ViewType.ServerDetail && !shouldExit)
@@ -81,7 +80,6 @@ public sealed class ServerMenuService(IConfigRepository configRepository, IServe
 
             if (!shouldContinue || shouldExit)
             {
-                nav.Pop();
                 return;
             }
         }
