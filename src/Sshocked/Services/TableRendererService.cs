@@ -1,6 +1,7 @@
 using Spectre.Console;
 using Sshocked.Interfaces;
 using Sshocked.Models;
+using System.ComponentModel;
 
 namespace Sshocked.Services;
 
@@ -44,22 +45,47 @@ public sealed class TableRendererService : ITableRendererService
         var table = new Table()
             .Border(TableBorder.Rounded)
             .Title($"[cyan]{groupName}[/]")
+            .Expand()
             .AddColumns([
                 new TableColumn("Alias"),
-                new TableColumn("Host"),
-                new TableColumn("User"),
-                new TableColumn("Port"),
-                new TableColumn("Auth")
+            new TableColumn("Host"),
+            new TableColumn("User"),
+            new TableColumn("Port"),
+            new TableColumn("Auth")
             ]);
 
-        foreach (var host in hosts)
+        for (int i = 0; i < hosts.Count; i++)
         {
+            var host = hosts[i];
+
+            // 1. Add Host row
             table.AddRow(
                 new Markup($"[bold]{Markup.Escape(host.Alias)}[/]"),
                 new Text(host.HostName),
                 new Text(host.User),
                 new Text(host.Port.ToString()),
                 new Text(GetAuthLabel(host.AuthType)));
+
+            // 2. Add Container rows
+            foreach (var container in host.SavedContainers)
+            {
+                table.AddRow(
+                    new Markup($"[grey]{Markup.Escape(container.Name)}[/]"),
+                    new Markup($"[grey]{Markup.Escape(container.Image)}[/]"),
+                    new Text(""),
+                    new Text(""),
+                    new Text(""));
+            }
+
+            if (i < hosts.Count - 1)
+            {
+                table.AddRow(
+                    new Rule().RuleStyle("grey35"),
+                    new Rule().RuleStyle("grey35"),
+                    new Rule().RuleStyle("grey35"),
+                    new Rule().RuleStyle("grey35"),
+                    new Rule().RuleStyle("grey35"));
+            }
         }
 
         AnsiConsole.Write(table);

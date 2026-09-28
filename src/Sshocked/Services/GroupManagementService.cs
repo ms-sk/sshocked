@@ -82,10 +82,4 @@ public sealed class GroupManagementService(IConfigRepository configRepository, I
         configRepository.Save(config);
         logger.LogInformation("Assigned host '{Alias}' to group {GroupId}", host.Alias, groupId);
     }
-
-    public List<ServerHost> GetHostsByGroup(string groupId)
-    {
-        var config = configRepository.Load();
-        return config.Hosts.Where(h => h.GroupId == groupId).ToList();
-    }
 }

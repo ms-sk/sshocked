@@ -9,5 +9,4 @@ public interface IGroupManagementService
     void Rename(string groupId, string newName);
     void Delete(string groupId);
     void AssignHost(string hostId, string groupId);
-    List<ServerHost> GetHostsByGroup(string groupId);
 }
