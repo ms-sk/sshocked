@@ -8,18 +8,133 @@ public sealed class KeyboardShortcutService : IKeyboardShortcutService
 {
     public MenuEntry? ShowMenu(string title, List<MenuEntry> options)
     {
-        var prompt = new SelectionPrompt<MenuEntry>()
-            .Title($"{title}")
-            .PageSize(15)
-            .UseConverter(entry => entry.DisplayLabel);
+        if (options.Count == 0)
+        {
+            return null;
+        }
 
-        prompt.AddChoices(options);
+        var shortcutMap = new Dictionary<char, MenuEntry>();
+        foreach (var entry in options)
+        {
+            if (entry.Shortcut.HasValue && !shortcutMap.ContainsKey(entry.Shortcut.Value))
+            {
+                shortcutMap[entry.Shortcut.Value] = entry;
+            }
+        }
 
-        prompt.HighlightStyle = Style.Parse("reverse");
-        prompt.MoreChoicesText = "[grey](Move up and down to reveal more options)[/]";
+        var selectedIndex = 0;
+        var firstRender = true;
+        int renderedLines = 0;
 
-        var selected = AnsiConsole.Prompt(prompt);
+        while (true)
+        {
+            if (!firstRender && renderedLines > 0)
+            {
+                Console.Write($"\x1b[{renderedLines}A\x1b[0J");
+            }
 
-        return selected;
+            renderedLines = RenderMenu(title, options, selectedIndex);
+            firstRender = false;
+
+            var key = System.Console.ReadKey(true);
+
+            if (key.Key is ConsoleKey.UpArrow or ConsoleKey.K)
+            {
+                selectedIndex = selectedIndex > 0 ? selectedIndex - 1 : options.Count - 1;
+                continue;
+            }
+
+            if (key.Key is ConsoleKey.DownArrow or ConsoleKey.J)
+            {
+                selectedIndex = (selectedIndex + 1) % options.Count;
+                continue;
+            }
+
+            if (key.Key == ConsoleKey.PageUp)
+            {
+                selectedIndex = Math.Max(0, selectedIndex - 10);
+                continue;
+            }
+
+            if (key.Key == ConsoleKey.PageDown)
+            {
+                selectedIndex = Math.Min(options.Count - 1, selectedIndex + 10);
+                continue;
+            }
+
+            if (key.Key == ConsoleKey.Home)
+            {
+                selectedIndex = 0;
+                continue;
+            }
+
+            if (key.Key == ConsoleKey.End)
+            {
+                selectedIndex = options.Count - 1;
+                continue;
+            }
+
+            if (key.Key is ConsoleKey.Enter or ConsoleKey.Spacebar)
+            {
+                System.Console.WriteLine();
+                return options[selectedIndex];
+            }
+
+            if (key.Key == ConsoleKey.Escape)
+            {
+                System.Console.WriteLine();
+                return FindBackOrExit(options);
+            }
+
+            if (key.KeyChar != '\0' && shortcutMap.TryGetValue(char.ToLowerInvariant(key.KeyChar), out var selected))
+            {
+                System.Console.WriteLine();
+                return selected;
+            }
+        }
+    }
+
+    private static MenuEntry? FindBackOrExit(List<MenuEntry> options)
+    {
+        foreach (var entry in options)
+        {
+            if (entry.ActionType is MenuActionType.Back or MenuActionType.Exit)
+            {
+                return entry;
+            }
+        }
+        return null;
+    }
+
+    private static int RenderMenu(string title, List<MenuEntry> options, int selectedIndex)
+    {
+        var lines = 0;
+
+        AnsiConsole.MarkupLine($"{title}");
+        lines++;
+        AnsiConsole.WriteLine();
+        lines++;
+
+        for (var i = 0; i < options.Count; i++)
+        {
+            var entry = options[i];
+            var prefix = i == selectedIndex ? "> " : "  ";
+
+            if (i == selectedIndex)
+            {
+                AnsiConsole.MarkupLine($"{prefix}[reverse]{entry.DisplayLabel}[/]");
+            }
+            else
+            {
+                AnsiConsole.MarkupLine($"{prefix}{entry.DisplayLabel}");
+            }
+            lines++;
+        }
+
+        var hint = "[grey]↑↓ Navigate | Shortcut key | Enter Confirm | Esc = Back[/]";
+        AnsiConsole.MarkupLine(hint);
+        lines++;
+
+        return lines;
     }
 }
