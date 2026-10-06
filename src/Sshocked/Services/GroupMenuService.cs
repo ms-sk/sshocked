@@ -181,14 +181,18 @@ public sealed class GroupMenuService(IConfigRepository configRepository, IGroupM
 
     private async Task ConnectAllContainers(AppConfig config, List<ContainerModel> containers)
     {
-        var menuEntries = new List<MenuEntry>
-            {
-                new("Sequential (one after another)", 'S', executeAsync: () => containerGroupService.ExecAllSequential(config, containers)),
-                new("Multi-Tab (new terminal windows)", 'M', executeAsync: () => containerGroupService.ExecAllMultiTab(config, containers)),
-                new("Back", 'B', actionType: MenuActionType.Back)
-            };
+        var strategy = config.DefaultConnectionStrategy;
+        var strategyLabel = strategy == ConnectionStrategy.MultiTab ? "multi-tab" : "sequential";
 
-        await menuFactory.RunMenu("[bold yellow]Exec all containers — Strategy[/]", menuEntries);
+        AnsiConsole.MarkupLine($"[green]Exec'ing {containers.Count} container(s) using {strategyLabel}...[/]");
+        if (strategy == ConnectionStrategy.MultiTab)
+        {
+            await containerGroupService.ExecAllMultiTab(config, containers);
+        }
+        else
+        {
+            await containerGroupService.ExecAllSequential(config, containers);
+        }
     }
 
     private async Task RunCommandOnContainers(AppConfig config, List<ContainerModel> containers)
@@ -293,14 +297,19 @@ public sealed class GroupMenuService(IConfigRepository configRepository, IGroupM
 
     private async Task ConnectAllServers(List<ServerHost> hosts)
     {
-        var menuEntries = new List<MenuEntry>
-            {
-                new("Sequential (one after another)", 'S', executeAsync: () => groupConnection.ConnectAllSequential(hosts)),
-                new("Multi-Tab (new terminal windows)", 'M', executeAsync: () => groupConnection.ConnectAllMultiTab(hosts)),
-                new("Back", 'B', actionType: MenuActionType.Back)
-            };
+        var config = configRepository.Load();
+        var strategy = config.DefaultConnectionStrategy;
+        var strategyLabel = strategy == ConnectionStrategy.MultiTab ? "multi-tab" : "sequential";
 
-        await menuFactory.RunMenu("[bold yellow]Connect all servers — Strategy[/]", menuEntries);
+        AnsiConsole.MarkupLine($"[green]Connecting {hosts.Count} server(s) using {strategyLabel}...[/]");
+        if (strategy == ConnectionStrategy.MultiTab)
+        {
+            await groupConnection.ConnectAllMultiTab(hosts);
+        }
+        else
+        {
+            await groupConnection.ConnectAllSequential(hosts);
+        }
     }
 }
 

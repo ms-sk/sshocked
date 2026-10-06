@@ -33,13 +33,57 @@ public sealed class MainMenuService(IConfigRepository configRepository, IServerC
     {
         return new List<MenuEntry>
         {
-            new("Connect", 'C', executeAsync: () => ConnectToServer(config)),
+            new("Quick Connect", 'C', executeAsync: () => ConnectToServer(config)),
             new("Connect Group", 'G', executeAsync: () => ConnectToGroup(config)),
             new("Run command", 'X', executeAsync: () => RunCommandOnGroup(config)),
-            new("Servers", 'S', executeAsync: () => ShowServersMenu(config)),
-            new("Groups", 'R', executeAsync: () => ShowGroupsMenu(config)),
+            new("Manage Servers", 'S', executeAsync: () => ShowServersMenu(config)),
+            new("Manage Groups", 'R', executeAsync: () => ShowGroupsMenu(config)),
+            new("Settings", 'T', executeAsync: () => ShowSettingsMenu(config)),
             new("Exit", 'E', actionType: MenuActionType.Exit)
         };
+    }
+
+    private async Task ShowSettingsMenu(AppConfig config)
+    {
+        var running = true;
+
+        while (running)
+        {
+            config = configRepository.Load();
+            AnsiConsole.Clear();
+
+            var currentStrategy = config.DefaultConnectionStrategy == ConnectionStrategy.MultiTab
+                ? "Multi-Tab"
+                : "Sequential";
+
+            AnsiConsole.MarkupLine("[bold yellow]Settings[/]");
+            AnsiConsole.WriteLine();
+            AnsiConsole.MarkupLine($"  Default connection strategy: [green]{currentStrategy}[/]");
+            AnsiConsole.WriteLine();
+
+            var menuEntries = new List<MenuEntry>
+            {
+                new("Default to Multi-Tab (parallel)", 'M', executeAsync: () =>
+                {
+                    config.DefaultConnectionStrategy = ConnectionStrategy.MultiTab;
+                    configRepository.Save(config);
+                    AnsiConsole.MarkupLine("[green]✓ Default strategy set to Multi-Tab[/]");
+                    consoleHelper.WaitForKey();
+                    return Task.CompletedTask;
+                }),
+                new("Default to Sequential (one after another)", 'Q', executeAsync: () =>
+                {
+                    config.DefaultConnectionStrategy = ConnectionStrategy.Sequential;
+                    configRepository.Save(config);
+                    AnsiConsole.MarkupLine("[green]✓ Default strategy set to Sequential[/]");
+                    consoleHelper.WaitForKey();
+                    return Task.CompletedTask;
+                }),
+                new("Back", 'B', actionType: MenuActionType.Back)
+            };
+
+            running = await menuFactory.RunMenu("[bold yellow]Settings[/]", menuEntries);
+        }
     }
 
     private async Task ShowServersMenu(AppConfig config)
@@ -54,14 +98,12 @@ public sealed class MainMenuService(IConfigRepository configRepository, IServerC
 
             var menuEntries = new List<MenuEntry>
             {
-                new("Show all", 'S', executeAsync: () => serverMenu.SelectServer()),
-                new("Add", 'A', executeAsync: () => { AddServer(); return Task.CompletedTask; }),
-                new("Edit", 'E', executeAsync: () => { EditServer(config); return Task.CompletedTask; }),
-                new("Delete", 'D', executeAsync: () => { DeleteServer(config); return Task.CompletedTask; }),
+                new("Browse / Manage", 'S', executeAsync: () => serverMenu.SelectServer()),
+                new("Add Server", 'A', executeAsync: () => { AddServer(); return Task.CompletedTask; }),
                 new("Back", 'B', actionType: MenuActionType.Back)
             };
 
-            running = await menuFactory.RunMenu("[bold yellow]Servers[/]", menuEntries);
+            running = await menuFactory.RunMenu("[bold yellow]Manage Servers[/]", menuEntries);
         }
     }
 
@@ -77,14 +119,12 @@ public sealed class MainMenuService(IConfigRepository configRepository, IServerC
 
             var menuEntries = new List<MenuEntry>
             {
-                new("Show groups", 'S', executeAsync: () => groupMenu.Browse()),
-                new("Add", 'A', executeAsync: () => { CreateNewGroup(config); return Task.CompletedTask; }),
-                new("Edit", 'E', executeAsync: () => { RenameGroup(config); return Task.CompletedTask; }),
-                new("Delete", 'D', executeAsync: () => { DeleteGroup(config); return Task.CompletedTask; }),
+                new("Browse / Manage", 'S', executeAsync: () => groupMenu.Browse()),
+                new("Create Group", 'A', executeAsync: () => { CreateNewGroup(config); return Task.CompletedTask; }),
                 new("Back", 'B', actionType: MenuActionType.Back)
             };
 
-            running = await menuFactory.RunMenu("[bold yellow]Groups[/]", menuEntries);
+            running = await menuFactory.RunMenu("[bold yellow]Manage Groups[/]", menuEntries);
         }
     }
 
@@ -124,23 +164,38 @@ public sealed class MainMenuService(IConfigRepository configRepository, IServerC
             return;
         }
 
-        var menuEntries = new List<MenuEntry>();
+        var strategy = config.DefaultConnectionStrategy;
+        var strategyLabel = strategy == ConnectionStrategy.MultiTab ? "multi-tab" : "sequential";
 
         if (hosts.Count > 0)
         {
-            menuEntries.Add(new MenuEntry("Connect all servers (sequential)", 'Q', executeAsync: () => groupConnection.ConnectAllSequential(hosts)));
-            menuEntries.Add(new MenuEntry("Connect all servers (multi-tab)", 'W', executeAsync: () => groupConnection.ConnectAllMultiTab(hosts)));
+            AnsiConsole.MarkupLine($"[green]Connecting {hosts.Count} server(s) using {strategyLabel}...[/]");
+            if (strategy == ConnectionStrategy.MultiTab)
+            {
+                await groupConnection.ConnectAllMultiTab(hosts);
+            }
+            else
+            {
+                await groupConnection.ConnectAllSequential(hosts);
+            }
         }
 
         if (containers.Count > 0)
         {
-            menuEntries.Add(new MenuEntry("Exec all containers (sequential)", 'E', executeAsync: () => containerGroupService.ExecAllSequential(config, containers)));
-            menuEntries.Add(new MenuEntry("Exec all containers (multi-tab)", 'X', executeAsync: () => containerGroupService.ExecAllMultiTab(config, containers)));
+            if (hosts.Count > 0)
+            {
+                consoleHelper.WaitForKey();
+            }
+            AnsiConsole.MarkupLine($"[green]Exec'ing {containers.Count} container(s) using {strategyLabel}...[/]");
+            if (strategy == ConnectionStrategy.MultiTab)
+            {
+                await containerGroupService.ExecAllMultiTab(config, containers);
+            }
+            else
+            {
+                await containerGroupService.ExecAllSequential(config, containers);
+            }
         }
-
-        menuEntries.Add(new MenuEntry("Back", 'B', actionType: MenuActionType.Back));
-
-        await menuFactory.RunMenu($"[bold yellow]Connect group: {Markup.Escape(group.Name)}[/]", menuEntries);
     }
 
     private async Task RunCommandOnGroup(AppConfig config)
